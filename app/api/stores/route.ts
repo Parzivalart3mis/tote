@@ -5,6 +5,7 @@ import { stores, items } from '@/db/schema';
 import { createStoreSchema } from '@/lib/schemas/store';
 import { checkRateLimit } from '@/lib/ratelimit';
 import { apiError, apiOk } from '@/lib/api-helpers';
+import { requireAuthWithSync } from '@/lib/auth';
 
 export async function GET() {
   const { userId } = await auth();
@@ -31,8 +32,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const { userId } = await auth();
-  if (!userId) return apiError('UNAUTHORIZED', 'Not signed in', 401);
+  let userId: string;
+  try { userId = await requireAuthWithSync(); }
+  catch { return apiError('UNAUTHORIZED', 'Not signed in', 401); }
 
   const { ok } = await checkRateLimit(userId);
   if (!ok) return apiError('RATE_LIMITED', 'Too many requests', 429);

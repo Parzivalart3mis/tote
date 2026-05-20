@@ -13,7 +13,7 @@ async function seed() {
   }).onConflictDoNothing();
 
   // Wipe existing seed data
-  await db.delete(stores).all();
+  await db.delete(stores);
 
   const [tj, costco, ig] = await db.insert(stores).values([
     {

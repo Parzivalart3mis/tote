@@ -28,9 +28,9 @@ export default clerkMiddleware(async (auth, req) => {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: https: blob:",
-      "connect-src 'self' https://*.clerk.com https://*.clerk.accounts.dev https://*.turso.io",
-      "frame-src 'self' https://clerk.accounts.dev https://*.clerk.accounts.dev",
-      "frame-ancestors 'none'",
+      "connect-src 'self' https://*.clerk.com https://*.clerk.accounts.dev https://*.turso.io wss://*.clerk.accounts.dev",
+      "frame-src 'self' https://clerk.accounts.dev https://*.clerk.accounts.dev https://*.clerk.com",
+      "frame-ancestors 'self'",
     ].join('; ')
   );
 

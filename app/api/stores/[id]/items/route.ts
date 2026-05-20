@@ -1,16 +1,17 @@
-import { auth } from '@clerk/nextjs/server';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { stores, items } from '@/db/schema';
 import { createItemSchema } from '@/lib/schemas/item';
 import { checkRateLimit } from '@/lib/ratelimit';
 import { apiError, apiOk } from '@/lib/api-helpers';
+import { requireAuthWithSync } from '@/lib/auth';
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(req: Request, { params }: Params) {
-  const { userId } = await auth();
-  if (!userId) return apiError('UNAUTHORIZED', 'Not signed in', 401);
+  let userId: string;
+  try { userId = await requireAuthWithSync(); }
+  catch { return apiError('UNAUTHORIZED', 'Not signed in', 401); }
 
   const { ok } = await checkRateLimit(userId);
   if (!ok) return apiError('RATE_LIMITED', 'Too many requests', 429);

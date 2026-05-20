@@ -23,7 +23,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
 
 interface StoreDetailViewProps {
   store: Store;
@@ -84,7 +83,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   };
 
   return (
-    <div className="flex h-screen flex-col" style={{ backgroundColor: 'var(--bg)' }}>
+    <div className="flex min-h-screen flex-col" style={{ backgroundColor: 'var(--bg)' }}>
       {/* Cover banner */}
       <div className="relative h-44 w-full shrink-0">
         {showImage ? (

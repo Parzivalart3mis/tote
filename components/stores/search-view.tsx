@@ -44,7 +44,7 @@ export function SearchView() {
   }, [q]);
 
   return (
-    <div className="flex h-screen flex-col" style={{ backgroundColor: 'var(--bg)' }}>
+    <div className="flex min-h-screen flex-col" style={{ backgroundColor: 'var(--bg)' }}>
       {/* Search bar */}
       <div
         className="safe-top flex items-center gap-3 border-b px-4 py-3"

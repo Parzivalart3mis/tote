@@ -38,7 +38,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
+    <ClerkProvider signInUrl="/sign-in" signUpUrl="/sign-in">
       <html lang="en" className={inter.variable}>
         <head>
           <meta name="theme-color" content="#FBF7EE" />
