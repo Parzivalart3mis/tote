@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Background -->
+  <rect width="512" height="512" fill="#FBF7EE" rx="64"/>
+  <!-- Tote bag body: rounded rectangle -->
+  <rect x="120" y="196" width="272" height="228" rx="28" ry="28"
+        fill="none" stroke="#16A34A" stroke-width="28" stroke-linejoin="round"/>
+  <!-- Left handle: semicircle arc from ~168,196 up -->
+  <path d="M168 196 C168 140 216 104 256 104 C296 104 344 140 344 196"
+        fill="none" stroke="#16A34A" stroke-width="28" stroke-linecap="round"/>
+  <!-- Leaf inside bag: almond shape tilted slightly -->
+  <ellipse cx="256" cy="290" rx="46" ry="22"
+           transform="rotate(-15,256,290)"
+           fill="#16A34A"/>
+  <!-- Leaf midrib -->
+  <line x1="232" y1="302" x2="280" y2="278"
+        stroke="#FBF7EE" stroke-width="5" stroke-linecap="round"/>
+</svg>
