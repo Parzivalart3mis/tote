@@ -91,6 +91,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
             src={proxyUrl}
             alt={storeData.name}
             fill
+            unoptimized
             className="object-cover"
             onError={() => setImgError(true)}
             priority

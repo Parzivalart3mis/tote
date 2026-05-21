@@ -40,9 +40,9 @@ export function StoreCard({ id, name, coverImageUrl, uncheckedCount, index }: St
                 src={proxyUrl}
                 alt={name}
                 fill
+                unoptimized
                 className="object-cover"
                 onError={() => setImgError(true)}
-                sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
               />
             ) : (
               <InitialsTile name={name} className="size-full" />
