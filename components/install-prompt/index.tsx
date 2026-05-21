@@ -16,6 +16,7 @@ export function InstallPrompt() {
   useEffect(() => {
     const handler = (e: Event) => {
       e.preventDefault();
+      if (!window.matchMedia('(pointer: coarse)').matches) return;
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setDismissed(false);
     };
