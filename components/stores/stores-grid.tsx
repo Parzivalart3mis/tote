@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { ShoppingCart, ArrowUpAZ, ArrowDownAZ, ListFilter } from 'lucide-react';
 import { StoreCard } from './store-card';
 import { AddStoreSheet } from './add-store-sheet';
@@ -36,13 +37,19 @@ interface StoresGridProps {
 }
 
 export function StoresGrid({ initialStores }: StoresGridProps) {
+  const router = useRouter();
   const [stores, setStores] = useState<StoreRow[]>(initialStores);
   const [sortMode, setSortMode] = useState<SortMode>('name-asc');
 
-  // Sync with fresh server data when router.refresh() re-renders the parent
+  // Sync with fresh server data whenever parent re-renders (covers router.refresh())
   useEffect(() => {
     setStores(initialStores);
   }, [initialStores]);
+
+  // Auto-refresh on every mount so item counts are always current
+  useEffect(() => {
+    router.refresh();
+  }, [router]);
 
   const sorted = useMemo(() => sortStores(stores, sortMode), [stores, sortMode]);
 

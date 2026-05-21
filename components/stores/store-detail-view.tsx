@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, Check, Trash2, ShoppingCart, X } from 'lucide-react';
+import { ArrowLeft, Check, Trash2, ShoppingCart, X, Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import {
@@ -55,6 +55,25 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
 
   // Shopping mode
   const [shoppingMode, setShoppingMode] = useState(false);
+
+  // AI categorize
+  const [categorizing, setCategorizing] = useState(false);
+  const uncategorizedCount = items.filter((i) => !i.category).length;
+
+  const handleCategorize = async () => {
+    setCategorizing(true);
+    try {
+      const res = await fetch(`/api/stores/${storeData.id}/items/categorize`, { method: 'POST' });
+      const json = await res.json() as { categorized?: number; items?: Item[] };
+      if (!res.ok) throw new Error();
+      if (json.items) setItems(sortItems(json.items));
+      toast.success(`${json.categorized ?? 0} item${json.categorized === 1 ? '' : 's'} categorized`);
+    } catch {
+      toast.error('Could not categorize items');
+    } finally {
+      setCategorizing(false);
+    }
+  };
 
   // Category filter
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -307,6 +326,19 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
           </div>
         ) : (
           <div className="ml-auto flex items-center gap-3">
+            {uncategorizedCount > 0 && !shoppingMode && (
+              <button
+                onClick={() => void handleCategorize()}
+                disabled={categorizing}
+                className="flex items-center gap-1 text-sm font-medium disabled:opacity-60"
+                style={{ color: 'var(--accent)' }}
+              >
+                {categorizing
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <Sparkles size={14} />}
+                {categorizing ? 'Categorizing…' : 'Categorize'}
+              </button>
+            )}
             {!shoppingMode && (
               <button
                 onClick={() => setShoppingMode(true)}

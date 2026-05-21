@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Search, RotateCcw } from 'lucide-react';
+import { Search } from 'lucide-react';
+
 import { UserButton } from '@clerk/nextjs';
 import { useEffect } from 'react';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -39,13 +40,6 @@ export function TopBar() {
         </Link>
         <div className="flex items-center gap-1">
           <ThemeToggle />
-          <button
-            onClick={() => router.refresh()}
-            aria-label="Refresh"
-            className="flex size-9 items-center justify-center rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/5"
-          >
-            <RotateCcw size={17} style={{ color: 'var(--text-muted)' }} />
-          </button>
           <Link
             href="/search"
             aria-label="Search"
