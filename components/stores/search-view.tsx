@@ -47,7 +47,7 @@ export function SearchView() {
     <div className="flex min-h-screen flex-col" style={{ backgroundColor: 'var(--bg)' }}>
       {/* Search bar */}
       <div
-        className="safe-top flex items-center gap-3 border-b px-4 py-3"
+        className="safe-top flex items-center gap-2 border-b px-3 py-2"
         style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
       >
         <button
@@ -92,7 +92,7 @@ export function SearchView() {
         )}
 
         {!loading && q.trim() && results.length === 0 && (
-          <div className="mt-16 text-center">
+          <div className="mt-10 text-center">
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
               No results for &ldquo;{q}&rdquo;
             </p>
@@ -109,7 +109,7 @@ export function SearchView() {
             >
               <Link
                 href={`/stores/${store.id}`}
-                className="flex items-center justify-between px-4 py-3"
+                className="flex items-center justify-between px-3 py-2"
                 style={{ borderBottom: '1px solid var(--border)' }}
               >
                 <span className="font-semibold text-sm" style={{ color: 'var(--text)' }}>
@@ -123,7 +123,7 @@ export function SearchView() {
                 <Link
                   key={item.id}
                   href={`/stores/${store.id}`}
-                  className="flex items-center gap-3 px-8 py-2.5"
+                  className="flex items-center gap-2.5 px-6 py-2"
                   style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}
                 >
                   <div>

@@ -85,7 +85,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   return (
     <div className="flex min-h-screen flex-col" style={{ backgroundColor: 'var(--bg)' }}>
       {/* Cover banner */}
-      <div className="relative h-44 w-full shrink-0">
+      <div className="relative h-32 w-full shrink-0">
         {showImage ? (
           <Image
             src={proxyUrl}
@@ -120,9 +120,9 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
           </div>
         </div>
         {/* Store name */}
-        <div className="absolute bottom-3 left-4 right-4">
-          <h1 className="text-xl font-bold text-white drop-shadow">{storeData.name}</h1>
-          <p className="text-sm text-white/80">
+        <div className="absolute bottom-2 left-4 right-4">
+          <h1 className="text-base font-bold text-white drop-shadow">{storeData.name}</h1>
+          <p className="text-xs text-white/80">
             {items.filter((i) => !i.checked).length} item{items.filter((i) => !i.checked).length !== 1 ? 's' : ''} remaining
           </p>
         </div>
@@ -131,7 +131,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
       {/* Clear checked bar */}
       {checkedCount > 0 && (
         <div
-          className="flex items-center justify-between px-4 py-2"
+          className="flex items-center justify-between px-4 py-1.5"
           style={{ backgroundColor: 'var(--accent-soft)', borderBottom: '1px solid var(--border)' }}
         >
           <span className="text-sm" style={{ color: 'var(--accent)' }}>
@@ -169,7 +169,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
       {/* Item list */}
       <div className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--surface)' }}>
         {items.length === 0 ? (
-          <div className="mt-16 flex flex-col items-center gap-2 text-center px-4">
+          <div className="mt-10 flex flex-col items-center gap-1.5 text-center px-4">
             <p className="text-base font-medium" style={{ color: 'var(--text)' }}>No items yet</p>
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
               Type below to add your first item.

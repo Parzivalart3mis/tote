@@ -52,7 +52,7 @@ export function ItemRow({ item, onUpdated, onDeleted }: ItemRowProps) {
       animate={{ opacity: item.checked ? 0.45 : 1, x: 0 }}
       exit={{ opacity: 0, height: 0 }}
       transition={{ layout: { duration: 0.2 }, opacity: { duration: 0.2 } }}
-      className="flex items-start gap-3 px-4 py-3"
+      className="flex items-start gap-2.5 px-3 py-2"
       style={{
         borderBottom: '1px solid var(--border)',
         backgroundColor: item.favorite

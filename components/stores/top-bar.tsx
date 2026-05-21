@@ -29,7 +29,7 @@ export function TopBar() {
         borderColor: 'var(--border)',
       }}
     >
-      <div className="flex h-14 items-center justify-between px-4">
+      <div className="flex h-11 items-center justify-between px-4">
         <Link href="/stores" className="flex items-center gap-2">
           <Image src="/icons/icon-192.png" alt="Tote" width={28} height={28} className="rounded-md" />
           <span className="text-lg font-semibold" style={{ color: 'var(--text)' }}>

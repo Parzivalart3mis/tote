@@ -28,24 +28,24 @@ export function StoresGrid({ initialStores }: StoresGridProps) {
   };
 
   return (
-    <div className="px-4 pb-24 pt-4">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold" style={{ color: 'var(--text)' }}>
+    <div className="px-3 pb-16 pt-3">
+      <div className="mb-3 flex items-center justify-between">
+        <h1 className="text-base font-semibold" style={{ color: 'var(--text)' }}>
           My stores
         </h1>
         <AddStoreSheet onAdded={handleAdded} />
       </div>
 
       {stores.length === 0 ? (
-        <div className="mt-20 flex flex-col items-center gap-3 text-center">
-          <ShoppingCart size={40} style={{ color: 'var(--text-hint)' }} />
+        <div className="mt-12 flex flex-col items-center gap-2 text-center">
+          <ShoppingCart size={32} style={{ color: 'var(--text-hint)' }} />
           <p className="text-base font-medium" style={{ color: 'var(--text)' }}>No stores yet</p>
           <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
             Add your first store to get started.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {stores.map((store, i) => (
             <StoreCard
               key={store.id}

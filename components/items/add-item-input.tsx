@@ -40,11 +40,11 @@ export function AddItemInput({ storeId, onAdded }: AddItemInputProps) {
 
   return (
     <div
-      className="safe-bottom safe-x border-t px-4 py-3"
+      className="safe-bottom safe-x border-t px-3 py-2"
       style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
     >
       <div
-        className="flex items-center gap-2 rounded-xl border px-3 py-2"
+        className="flex items-center gap-2 rounded-xl border px-3 py-1.5"
         style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
       >
         <Plus size={16} style={{ color: 'var(--text-hint)' }} />
