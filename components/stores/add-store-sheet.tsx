@@ -140,6 +140,7 @@ export function AddStoreSheet({ onAdded }: AddStoreSheetProps) {
                 coverImageUrl={watchUrl || null}
                 uncheckedCount={0}
                 index={0}
+                onDeleted={() => undefined}
               />
             </motion.div>
           )}
