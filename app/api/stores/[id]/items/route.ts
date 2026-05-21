@@ -49,6 +49,7 @@ export async function POST(req: Request, { params }: Params) {
       note: parsed.data.note ?? null,
       price: parsed.data.price ?? null,
       priceUnit: parsed.data.priceUnit ?? null,
+      category: parsed.data.category ?? null,
       position: (maxPos?.pos ?? -1) + 1,
     })
     .returning();

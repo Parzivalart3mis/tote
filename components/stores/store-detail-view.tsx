@@ -1,17 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, Check, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Trash2, ShoppingCart, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import type { Store, Item } from '@/db/schema';
 import { InitialsTile } from '@/components/initials-tile';
-import { ItemRow } from '@/components/items/item-row';
+import { SortableItemRow } from '@/components/items/sortable-item-row';
 import { AddItemDialog } from '@/components/items/add-item-dialog';
 import { EditStoreDialog } from './edit-store-dialog';
+import { ITEM_CATEGORIES } from '@/lib/categories';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +52,35 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   const [storeData, setStoreData] = useState(store);
   const [items, setItems] = useState<Item[]>(sortItems(initialItems));
   const [imgError, setImgError] = useState(false);
+
+  // Shopping mode
+  const [shoppingMode, setShoppingMode] = useState(false);
+
+  // Category filter
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const usedCategories = [...new Set(items.map((i) => i.category).filter(Boolean))] as string[];
+
+  // Drag to reorder
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  );
+
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setItems((prev) => {
+      const oldIdx = prev.findIndex((i) => i.id === active.id);
+      const newIdx = prev.findIndex((i) => i.id === over.id);
+      const reordered = arrayMove(prev, oldIdx, newIdx);
+      void fetch(`/api/stores/${storeData.id}/items/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: reordered.map((i) => i.id) }),
+      }).catch(() => toast.error('Could not save order'));
+      return reordered;
+    });
+  }, [storeData.id]);
 
   // Multiselect state
   const [selectMode, setSelectMode] = useState(false);
@@ -73,6 +113,14 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   };
 
   const checkedCount = items.filter((i) => i.checked).length;
+
+  const estimatedTotal = items
+    .filter((i) => !i.checked && i.price)
+    .reduce((sum, i) => {
+      const qty = parseFloat(i.quantity ?? '1') || 1;
+      const price = parseFloat(i.price!) || 0;
+      return sum + qty * price;
+    }, 0);
 
   const clearChecked = async () => {
     try {
@@ -202,6 +250,26 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         </div>
       </div>
 
+      {/* Shopping mode banner */}
+      {shoppingMode && (
+        <div
+          className="flex items-center justify-between px-4 py-2"
+          style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+        >
+          <div className="flex items-center gap-2">
+            <ShoppingCart size={15} />
+            <span className="text-sm font-semibold">Shopping mode</span>
+          </div>
+          <button
+            onClick={() => setShoppingMode(false)}
+            aria-label="Exit shopping mode"
+            className="flex size-7 items-center justify-center rounded-full bg-white/20"
+          >
+            <X size={14} color="#fff" />
+          </button>
+        </div>
+      )}
+
       {/* Action row */}
       <div
         className="flex items-center border-b px-3 py-2"
@@ -212,6 +280,14 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
           disabled={selectMode}
           onAdded={handleItemAdded}
         />
+        {estimatedTotal > 0 && !selectMode && (
+          <span
+            className="ml-3 rounded-full px-2 py-0.5 text-xs font-semibold"
+            style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+          >
+            Est. ${estimatedTotal.toFixed(2)}
+          </span>
+        )}
         {selectMode ? (
           <div className="ml-auto flex items-center gap-3">
             <button
@@ -230,13 +306,25 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
             </button>
           </div>
         ) : (
-          <button
-            onClick={() => setSelectMode(true)}
-            className="ml-auto text-sm font-medium"
-            style={{ color: 'var(--text-muted)' }}
-          >
-            Select
-          </button>
+          <div className="ml-auto flex items-center gap-3">
+            {!shoppingMode && (
+              <button
+                onClick={() => setShoppingMode(true)}
+                className="flex items-center gap-1 text-sm font-medium"
+                style={{ color: 'var(--accent)' }}
+              >
+                <ShoppingCart size={14} />
+                Shop
+              </button>
+            )}
+            <button
+              onClick={() => setSelectMode(true)}
+              className="text-sm font-medium"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Select
+            </button>
+          </div>
         )}
       </div>
 
@@ -278,6 +366,38 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         </div>
       )}
 
+      {/* Category filter chips */}
+      {usedCategories.length > 0 && !selectMode && (
+        <div
+          className="flex gap-2 overflow-x-auto px-3 py-2 scrollbar-none"
+          style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}
+        >
+          <button
+            onClick={() => setActiveCategory(null)}
+            className="shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors"
+            style={{
+              backgroundColor: activeCategory === null ? 'var(--accent)' : 'var(--accent-soft)',
+              color: activeCategory === null ? '#fff' : 'var(--accent)',
+            }}
+          >
+            All
+          </button>
+          {usedCategories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
+              className="shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors"
+              style={{
+                backgroundColor: activeCategory === cat ? 'var(--accent)' : 'var(--accent-soft)',
+                color: activeCategory === cat ? '#fff' : 'var(--accent)',
+              }}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Item list — add bottom padding when multiselect bar is visible */}
       <div
         className="flex-1 overflow-y-auto"
@@ -294,19 +414,27 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
             </p>
           </div>
         ) : (
-          <AnimatePresence initial={false}>
-            {items.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                onUpdated={handleItemUpdated}
-                onDeleted={handleItemDeleted}
-                selectMode={selectMode}
-                selected={selectedIds.has(item.id)}
-                onSelect={toggleSelect}
-              />
-            ))}
-          </AnimatePresence>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+              <AnimatePresence initial={false}>
+                {items
+                  .filter((i) => !shoppingMode || !i.checked)
+                  .filter((i) => !activeCategory || i.category === activeCategory)
+                  .map((item) => (
+                    <SortableItemRow
+                      key={item.id}
+                      item={item}
+                      onUpdated={handleItemUpdated}
+                      onDeleted={handleItemDeleted}
+                      selectMode={selectMode}
+                      selected={selectedIds.has(item.id)}
+                      onSelect={toggleSelect}
+                      shoppingMode={shoppingMode}
+                    />
+                  ))}
+              </AnimatePresence>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 

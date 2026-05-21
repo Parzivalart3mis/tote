@@ -1,6 +1,8 @@
 import { z } from 'zod';
+import { ITEM_CATEGORIES } from '@/lib/categories';
 
 const priceUnitEnum = z.enum(['lb', 'oz', 'piece']).optional().nullable();
+const categoryEnum = z.enum(ITEM_CATEGORIES as unknown as [string, ...string[]]).optional().nullable();
 
 export const createItemSchema = z
   .object({
@@ -10,6 +12,7 @@ export const createItemSchema = z
     note: z.string().max(500).optional(),
     price: z.string().max(20).optional(),
     priceUnit: priceUnitEnum,
+    category: categoryEnum,
   })
   .strict();
 
@@ -21,6 +24,7 @@ export const updateItemSchema = z
     note: z.string().max(500).optional().nullable(),
     price: z.string().max(20).optional().nullable(),
     priceUnit: priceUnitEnum,
+    category: categoryEnum,
     checked: z.boolean().optional(),
     favorite: z.boolean().optional(),
     runningLow: z.boolean().optional(),

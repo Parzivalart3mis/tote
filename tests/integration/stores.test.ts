@@ -49,6 +49,7 @@ async function migrateTestDb(db: ReturnType<typeof createTestDb>) {
       note TEXT,
       price TEXT,
       price_unit TEXT,
+      category TEXT,
       checked INTEGER NOT NULL DEFAULT 0,
       favorite INTEGER NOT NULL DEFAULT 0,
       running_low INTEGER NOT NULL DEFAULT 0,

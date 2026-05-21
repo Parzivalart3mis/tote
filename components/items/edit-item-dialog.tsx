@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import type { Item } from '@/db/schema';
 import { updateItemSchema, type UpdateItemInput } from '@/lib/schemas/item';
+import { ITEM_CATEGORIES } from '@/lib/categories';
 
 interface EditItemDialogProps {
   item: Item;
@@ -42,6 +43,7 @@ export function EditItemDialog({ item, onUpdated }: EditItemDialogProps) {
       note: item.note ?? '',
       price: item.price ?? '',
       priceUnit: (item.priceUnit as 'lb' | 'oz' | 'piece' | undefined) ?? 'piece',
+      category: item.category ?? '',
     },
   });
 
@@ -58,6 +60,7 @@ export function EditItemDialog({ item, onUpdated }: EditItemDialogProps) {
           ...data,
           price: data.price?.trim() || null,
           priceUnit: data.price?.trim() ? (data.priceUnit ?? 'piece') : null,
+          category: data.category?.trim() || null,
         }),
       });
       const json = (await res.json()) as { item?: Item };
@@ -98,6 +101,21 @@ export function EditItemDialog({ item, onUpdated }: EditItemDialogProps) {
                 {errors.name.message}
               </p>
             )}
+          </div>
+
+          {/* Category */}
+          <div className="space-y-1.5">
+            <Label style={{ color: 'var(--text-muted)' }}>Category (optional)</Label>
+            <select
+              {...register('category')}
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)', color: 'var(--text)' }}
+            >
+              <option value="">— None —</option>
+              {ITEM_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
 
           {/* Quantity + Unit */}

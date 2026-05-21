@@ -14,9 +14,10 @@ interface ItemRowProps {
   selectMode?: boolean;
   selected?: boolean;
   onSelect?: (id: string) => void;
+  shoppingMode?: boolean;
 }
 
-export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSelect }: ItemRowProps) {
+export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSelect, shoppingMode }: ItemRowProps) {
   const [loading, setLoading] = useState<string | null>(null);
 
   const patch = async (updates: Partial<Item>) => {
@@ -90,13 +91,13 @@ export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSe
           onClick={() => patch({ checked: !item.checked })}
           disabled={loading === 'checked'}
           aria-label={item.checked ? 'Uncheck item' : 'Check item'}
-          className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors"
+          className={`mt-0.5 flex shrink-0 items-center justify-center rounded-full border-2 transition-colors ${shoppingMode ? 'size-7' : 'size-5'}`}
           style={{
             borderColor: item.checked ? 'var(--accent)' : 'var(--border)',
             backgroundColor: item.checked ? 'var(--accent)' : 'transparent',
           }}
         >
-          {item.checked && <Check size={11} color="#fff" strokeWidth={3} />}
+          {item.checked && <Check size={shoppingMode ? 14 : 11} color="#fff" strokeWidth={3} />}
         </button>
       )}
 

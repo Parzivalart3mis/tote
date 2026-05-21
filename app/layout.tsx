@@ -5,6 +5,8 @@ import { Toaster } from '@/components/ui/sonner';
 import { ServiceWorkerRegistrar } from '@/components/motion/service-worker-registrar';
 import './globals.css';
 
+const themeScript = `(function(){var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark');})();`;
+
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
@@ -43,6 +45,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <ClerkProvider signInUrl="/sign-in" signUpUrl="/sign-in">
       <html lang="en" className={inter.variable}>
         <head>
+          {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+          <script dangerouslySetInnerHTML={{ __html: themeScript }} />
           <meta name="theme-color" content="#FBF7EE" />
           <meta name="apple-mobile-web-app-capable" content="yes" />
           <meta name="mobile-web-app-capable" content="yes" />
