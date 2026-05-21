@@ -175,21 +175,33 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   return (
     <div className="flex min-h-screen flex-col" style={{ backgroundColor: 'var(--bg)' }}>
       {/* Cover banner */}
-      <div className="relative h-32 w-full shrink-0">
+      <div className="relative h-40 w-full shrink-0 overflow-hidden">
         {showImage ? (
-          <Image
-            src={proxyUrl}
-            alt={storeData.name}
-            fill
-            unoptimized
-            className="object-cover"
-            onError={() => setImgError(true)}
-            priority
-          />
+          <>
+            {/* Blurred backdrop fills the frame */}
+            <Image
+              src={proxyUrl}
+              alt=""
+              fill
+              unoptimized
+              aria-hidden
+              className="object-cover scale-110 blur-xl brightness-75"
+            />
+            {/* Sharp logo / photo centred on top */}
+            <Image
+              src={proxyUrl}
+              alt={storeData.name}
+              fill
+              unoptimized
+              className="object-contain"
+              onError={() => setImgError(true)}
+              priority
+            />
+          </>
         ) : (
           <InitialsTile name={storeData.name} className="size-full" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
         <Link
           href="/stores"
           className="safe-top absolute left-4 top-4 flex size-9 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm"
@@ -207,7 +219,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
           </div>
         </div>
         <div className="absolute bottom-2 left-4 right-4">
-          <h1 className="text-base font-bold text-white drop-shadow">{storeData.name}</h1>
+          <h1 className="text-lg font-bold text-white drop-shadow">{storeData.name}</h1>
           <p className="text-xs text-white/80">
             {items.filter((i) => !i.checked).length} item{items.filter((i) => !i.checked).length !== 1 ? 's' : ''} remaining
           </p>

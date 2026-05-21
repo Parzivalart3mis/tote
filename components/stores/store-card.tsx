@@ -34,14 +34,17 @@ export function StoreCard({ id, name, coverImageUrl, uncheckedCount, index }: St
           style={{ backgroundColor: 'var(--surface)', border: '1px solid var(--border)' }}
         >
           {/* Cover image / initials tile */}
-          <div className="relative aspect-[3/2] w-full overflow-hidden">
+          <div
+            className="relative aspect-[3/2] w-full overflow-hidden"
+            style={{ backgroundColor: 'var(--surface)' }}
+          >
             {showImage ? (
               <Image
                 src={proxyUrl}
                 alt={name}
                 fill
                 unoptimized
-                className="object-cover"
+                className="object-contain"
                 onError={() => setImgError(true)}
               />
             ) : (
@@ -50,7 +53,7 @@ export function StoreCard({ id, name, coverImageUrl, uncheckedCount, index }: St
           </div>
           {/* Card footer */}
           <div className="flex items-center justify-between px-2.5 py-2">
-            <span className="truncate text-xs font-medium" style={{ color: 'var(--text)' }}>
+            <span className="truncate text-sm font-medium" style={{ color: 'var(--text)' }}>
               {name}
             </span>
             {uncheckedCount > 0 && (
