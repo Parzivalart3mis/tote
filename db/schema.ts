@@ -48,6 +48,8 @@ export const items = sqliteTable(
     quantity: text('quantity'),
     unit: text('unit'),
     note: text('note'),
+    price: text('price'),
+    priceUnit: text('price_unit'),
     checked: integer('checked', { mode: 'boolean' }).notNull().default(false),
     favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
     runningLow: integer('running_low', { mode: 'boolean' }).notNull().default(false),

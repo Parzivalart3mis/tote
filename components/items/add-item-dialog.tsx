@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { toast } from 'sonner';
-import { Pencil } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -14,17 +15,23 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import type { Item } from '@/db/schema';
-import { updateItemSchema, type UpdateItemInput } from '@/lib/schemas/item';
 
-interface EditItemDialogProps {
-  item: Item;
-  onUpdated: (item: Item) => void;
-  onDeleted: (id: string) => void;
+const addSchema = z.object({
+  name: z.string().min(1, 'Item name is required').max(200),
+  price: z.string().max(20).optional(),
+  priceUnit: z.enum(['lb', 'oz', 'piece']).optional(),
+});
+
+type AddForm = z.infer<typeof addSchema>;
+
+interface AddItemDialogProps {
+  storeId: string;
+  disabled?: boolean;
+  onAdded: (item: Item) => void;
 }
 
-export function EditItemDialog({ item, onUpdated }: EditItemDialogProps) {
+export function AddItemDialog({ storeId, disabled, onAdded }: AddItemDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -32,64 +39,65 @@ export function EditItemDialog({ item, onUpdated }: EditItemDialogProps) {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors },
-  } = useForm<UpdateItemInput>({
-    resolver: zodResolver(updateItemSchema),
-    defaultValues: {
-      name: item.name,
-      quantity: item.quantity ?? '',
-      unit: item.unit ?? '',
-      note: item.note ?? '',
-      price: item.price ?? '',
-      priceUnit: (item.priceUnit as 'lb' | 'oz' | 'piece' | undefined) ?? 'piece',
-    },
+  } = useForm<AddForm>({
+    resolver: zodResolver(addSchema),
+    defaultValues: { name: '', price: '', priceUnit: 'piece' },
   });
 
   const priceValue = watch('price');
   const showPriceUnit = !!priceValue?.trim();
 
-  const onSubmit = async (data: UpdateItemInput) => {
+  const onSubmit = async (data: AddForm) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/items/${item.id}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/stores/${storeId}/items`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...data,
-          price: data.price?.trim() || null,
-          priceUnit: data.price?.trim() ? (data.priceUnit ?? 'piece') : null,
+          name: data.name,
+          price: data.price?.trim() || undefined,
+          priceUnit: data.price?.trim() ? (data.priceUnit ?? 'piece') : undefined,
         }),
       });
       const json = (await res.json()) as { item?: Item };
       if (!res.ok) throw new Error();
-      onUpdated(json.item!);
+      onAdded(json.item!);
+      reset();
       setOpen(false);
-      toast.success('Item updated');
+      toast.success(`${data.name} added`);
     } catch {
-      toast.error('Could not update item');
+      toast.error('Could not add item');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) reset(); }}>
       <DialogTrigger
-        aria-label="Edit item"
-        className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5"
+        disabled={disabled}
+        className="flex items-center gap-1.5"
+        style={{ color: disabled ? 'var(--text-hint)' : 'var(--accent)' }}
+        aria-label="Add item"
       >
-        <Pencil size={13} style={{ color: 'var(--text-hint)' }} />
+        <Plus size={15} />
+        <span className="text-sm font-medium">Add item</span>
       </DialogTrigger>
+
       <DialogContent style={{ backgroundColor: 'var(--surface)' }}>
         <DialogHeader>
-          <DialogTitle style={{ color: 'var(--text)' }}>Edit item</DialogTitle>
+          <DialogTitle style={{ color: 'var(--text)' }}>Add item</DialogTitle>
         </DialogHeader>
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
           {/* Name */}
           <div className="space-y-1.5">
             <Label style={{ color: 'var(--text-muted)' }}>Name</Label>
             <Input
               {...register('name')}
+              placeholder="e.g. Whole milk"
               autoFocus
               style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
             />
@@ -98,26 +106,6 @@ export function EditItemDialog({ item, onUpdated }: EditItemDialogProps) {
                 {errors.name.message}
               </p>
             )}
-          </div>
-
-          {/* Quantity + Unit */}
-          <div className="flex gap-2">
-            <div className="flex-1 space-y-1.5">
-              <Label style={{ color: 'var(--text-muted)' }}>Quantity</Label>
-              <Input
-                {...register('quantity')}
-                placeholder="2"
-                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
-              />
-            </div>
-            <div className="flex-1 space-y-1.5">
-              <Label style={{ color: 'var(--text-muted)' }}>Unit</Label>
-              <Input
-                {...register('unit')}
-                placeholder="lbs"
-                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
-              />
-            </div>
           </div>
 
           {/* Price */}
@@ -157,24 +145,13 @@ export function EditItemDialog({ item, onUpdated }: EditItemDialogProps) {
             </div>
           </div>
 
-          {/* Note */}
-          <div className="space-y-1.5">
-            <Label style={{ color: 'var(--text-muted)' }}>Note</Label>
-            <Textarea
-              {...register('note')}
-              rows={2}
-              placeholder="Any note…"
-              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
-            />
-          </div>
-
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-xl py-2 text-sm font-medium text-white transition-opacity disabled:opacity-60"
+            className="w-full rounded-xl py-2.5 text-sm font-medium text-white transition-opacity disabled:opacity-60"
             style={{ backgroundColor: 'var(--accent)' }}
           >
-            {loading ? 'Saving…' : 'Save'}
+            {loading ? 'Adding…' : 'Add item'}
           </button>
         </form>
       </DialogContent>

@@ -1,11 +1,15 @@
 import { z } from 'zod';
 
+const priceUnitEnum = z.enum(['lb', 'oz', 'piece']).optional().nullable();
+
 export const createItemSchema = z
   .object({
     name: z.string().min(1, 'Item name is required').max(200),
     quantity: z.string().max(20).optional(),
     unit: z.string().max(20).optional(),
     note: z.string().max(500).optional(),
+    price: z.string().max(20).optional(),
+    priceUnit: priceUnitEnum,
   })
   .strict();
 
@@ -15,6 +19,8 @@ export const updateItemSchema = z
     quantity: z.string().max(20).optional().nullable(),
     unit: z.string().max(20).optional().nullable(),
     note: z.string().max(500).optional().nullable(),
+    price: z.string().max(20).optional().nullable(),
+    priceUnit: priceUnitEnum,
     checked: z.boolean().optional(),
     favorite: z.boolean().optional(),
     runningLow: z.boolean().optional(),

@@ -1,15 +1,16 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, Check, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import type { Store, Item } from '@/db/schema';
 import { InitialsTile } from '@/components/initials-tile';
 import { ItemRow } from '@/components/items/item-row';
+import { AddItemDialog } from '@/components/items/add-item-dialog';
 import { EditStoreDialog } from './edit-store-dialog';
 import {
   AlertDialog,
@@ -41,19 +42,9 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   const [items, setItems] = useState<Item[]>(sortItems(initialItems));
   const [imgError, setImgError] = useState(false);
 
-  // Inline add state
-  const [addingItem, setAddingItem] = useState(false);
-  const [addValue, setAddValue] = useState('');
-  const [addLoading, setAddLoading] = useState(false);
-  const addInputRef = useRef<HTMLInputElement>(null);
-
   // Multiselect state
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (addingItem) addInputRef.current?.focus();
-  }, [addingItem]);
 
   const proxyUrl = storeData.coverImageUrl
     ? `/api/img?u=${encodeURIComponent(storeData.coverImageUrl)}`
@@ -95,29 +86,6 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
     }
   };
 
-  // Inline add submit
-  const submitAdd = async () => {
-    const name = addValue.trim();
-    if (!name) return;
-    setAddLoading(true);
-    try {
-      const res = await fetch(`/api/stores/${storeData.id}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-      const json = await res.json() as { item?: Item };
-      if (!res.ok) throw new Error();
-      handleItemAdded(json.item!);
-      setAddValue('');
-      addInputRef.current?.focus();
-    } catch {
-      toast.error('Could not add item');
-    } finally {
-      setAddLoading(false);
-    }
-  };
-
   // Multiselect helpers
   const exitSelectMode = () => {
     setSelectMode(false);
@@ -131,6 +99,16 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
       else next.add(id);
       return next;
     });
+  };
+
+  const allSelected = items.length > 0 && selectedIds.size === items.length;
+
+  const toggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map((i) => i.id)));
+    }
   };
 
   const allSelectedChecked =
@@ -178,7 +156,6 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
       <div className="relative h-40 w-full shrink-0 overflow-hidden">
         {showImage ? (
           <>
-            {/* Blurred backdrop fills the frame */}
             <Image
               src={proxyUrl}
               alt=""
@@ -187,7 +164,6 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
               aria-hidden
               className="object-cover scale-110 blur-xl brightness-75"
             />
-            {/* Sharp logo / photo centred on top */}
             <Image
               src={proxyUrl}
               alt={storeData.name}
@@ -226,66 +202,41 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         </div>
       </div>
 
-      {/* Action row: inline add + select toggle */}
+      {/* Action row */}
       <div
         className="flex items-center border-b px-3 py-2"
         style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
       >
-        {addingItem ? (
-          <div className="flex flex-1 items-center gap-2">
-            <input
-              ref={addInputRef}
-              type="text"
-              value={addValue}
-              onChange={(e) => setAddValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') { e.preventDefault(); void submitAdd(); }
-                if (e.key === 'Escape') { setAddingItem(false); setAddValue(''); }
-              }}
-              placeholder="Item name…"
-              disabled={addLoading}
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-[color:var(--text-hint)]"
-              style={{ color: 'var(--text)' }}
-              aria-label="New item name"
-            />
-            {addValue.trim() && (
-              <button
-                onClick={() => void submitAdd()}
-                disabled={addLoading}
-                className="rounded-lg px-2 py-1 text-xs font-semibold"
-                style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
-              >
-                Add
-              </button>
-            )}
+        <AddItemDialog
+          storeId={storeData.id}
+          disabled={selectMode}
+          onAdded={handleItemAdded}
+        />
+        {selectMode ? (
+          <div className="ml-auto flex items-center gap-3">
             <button
-              onClick={() => { setAddingItem(false); setAddValue(''); }}
-              aria-label="Cancel"
-              className="flex size-6 items-center justify-center rounded-lg"
+              onClick={toggleSelectAll}
+              className="text-sm font-medium"
+              style={{ color: 'var(--accent)' }}
             >
-              <X size={15} style={{ color: 'var(--text-muted)' }} />
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </button>
+            <button
+              onClick={exitSelectMode}
+              className="text-sm font-medium"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Done
             </button>
           </div>
         ) : (
-          <>
-            <button
-              onClick={() => { if (!selectMode) setAddingItem(true); }}
-              disabled={selectMode}
-              className="flex items-center gap-1.5"
-              style={{ color: selectMode ? 'var(--text-hint)' : 'var(--accent)' }}
-              aria-label="Add item"
-            >
-              <Plus size={15} />
-              <span className="text-sm font-medium">Add item</span>
-            </button>
-            <button
-              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
-              className="ml-auto text-sm font-medium"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              {selectMode ? 'Done' : 'Select'}
-            </button>
-          </>
+          <button
+            onClick={() => setSelectMode(true)}
+            className="ml-auto text-sm font-medium"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            Select
+          </button>
         )}
       </div>
 
@@ -327,8 +278,14 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         </div>
       )}
 
-      {/* Item list */}
-      <div className="flex-1 overflow-y-auto" style={{ backgroundColor: 'var(--surface)' }}>
+      {/* Item list — add bottom padding when multiselect bar is visible */}
+      <div
+        className="flex-1 overflow-y-auto"
+        style={{
+          backgroundColor: 'var(--surface)',
+          paddingBottom: selectMode && selectedIds.size > 0 ? '4rem' : 0,
+        }}
+      >
         {items.length === 0 ? (
           <div className="mt-10 flex flex-col items-center gap-1.5 text-center px-4">
             <p className="text-base font-medium" style={{ color: 'var(--text)' }}>No items yet</p>
@@ -353,7 +310,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         )}
       </div>
 
-      {/* Multiselect bottom action bar */}
+      {/* Multiselect bottom action bar — fixed to viewport bottom */}
       <AnimatePresence>
         {selectMode && selectedIds.size > 0 && (
           <motion.div
@@ -361,7 +318,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
             animate={{ y: 0 }}
             exit={{ y: 80 }}
             transition={{ type: 'spring', stiffness: 400, damping: 35 }}
-            className="safe-bottom flex items-center justify-between border-t px-4 py-2.5"
+            className="safe-bottom fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t px-4 py-2.5"
             style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
           >
             <span className="text-sm" style={{ color: 'var(--text-muted)' }}>

@@ -45,6 +45,16 @@ describe('createItemSchema', () => {
     expect(r.success).toBe(true);
   });
 
+  it('accepts item with price and unit', () => {
+    const r = createItemSchema.safeParse({ name: 'Apples', price: '1.99', priceUnit: 'lb' });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects invalid priceUnit', () => {
+    const r = createItemSchema.safeParse({ name: 'Apples', price: '1.99', priceUnit: 'kg' });
+    expect(r.success).toBe(false);
+  });
+
   it('rejects empty name', () => {
     const r = createItemSchema.safeParse({ name: '' });
     expect(r.success).toBe(false);

@@ -43,10 +43,15 @@ export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSe
       const res = await fetch(`/api/items/${item.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       onDeleted(item.id);
+      toast.success(`${item.name} removed`);
     } catch {
       toast.error('Could not delete item');
     }
   };
+
+  const priceLabel = item.price
+    ? `$${item.price}${item.priceUnit ? `/${item.priceUnit}` : ''}`
+    : null;
 
   return (
     <motion.div
@@ -112,6 +117,14 @@ export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSe
               {[item.quantity, item.unit].filter(Boolean).join(' ')}
             </span>
           )}
+          {priceLabel && (
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+              style={{ backgroundColor: 'rgba(22,163,74,0.1)', color: 'var(--accent)' }}
+            >
+              {priceLabel}
+            </span>
+          )}
           {item.runningLow && (
             <span
               className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
@@ -158,6 +171,14 @@ export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSe
             />
           </motion.button>
           <EditItemDialog item={item} onUpdated={onUpdated} onDeleted={onDeleted} />
+          <motion.button
+            onClick={handleDelete}
+            aria-label="Delete item"
+            whileTap={{ scale: 0.9 }}
+            className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-red-50"
+          >
+            <Trash2 size={13} style={{ color: 'var(--error)' }} />
+          </motion.button>
         </div>
       )}
     </motion.div>
