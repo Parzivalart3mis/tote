@@ -61,6 +61,26 @@ describe('createItemSchema', () => {
   });
 });
 
+describe('bulk ids validation', () => {
+  const { z } = require('zod');
+  const idsSchema = z.object({ ids: z.array(z.string().min(1)).min(1).max(100) }).strict();
+
+  it('accepts valid ids array', () => {
+    const r = idsSchema.safeParse({ ids: ['abc', 'def'] });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects empty ids array', () => {
+    const r = idsSchema.safeParse({ ids: [] });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects ids array over 100', () => {
+    const r = idsSchema.safeParse({ ids: Array.from({ length: 101 }, (_, i) => String(i)) });
+    expect(r.success).toBe(false);
+  });
+});
+
 describe('updateItemSchema', () => {
   it('accepts partial updates', () => {
     const r = updateItemSchema.safeParse({ checked: true });

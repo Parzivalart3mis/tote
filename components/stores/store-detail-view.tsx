@@ -1,16 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import type { Store, Item } from '@/db/schema';
 import { InitialsTile } from '@/components/initials-tile';
 import { ItemRow } from '@/components/items/item-row';
-import { AddItemInput } from '@/components/items/add-item-input';
 import { EditStoreDialog } from './edit-store-dialog';
 import {
   AlertDialog,
@@ -41,6 +40,20 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   const [storeData, setStoreData] = useState(store);
   const [items, setItems] = useState<Item[]>(sortItems(initialItems));
   const [imgError, setImgError] = useState(false);
+
+  // Inline add state
+  const [addingItem, setAddingItem] = useState(false);
+  const [addValue, setAddValue] = useState('');
+  const [addLoading, setAddLoading] = useState(false);
+  const addInputRef = useRef<HTMLInputElement>(null);
+
+  // Multiselect state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (addingItem) addInputRef.current?.focus();
+  }, [addingItem]);
 
   const proxyUrl = storeData.coverImageUrl
     ? `/api/img?u=${encodeURIComponent(storeData.coverImageUrl)}`
@@ -82,6 +95,83 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
     }
   };
 
+  // Inline add submit
+  const submitAdd = async () => {
+    const name = addValue.trim();
+    if (!name) return;
+    setAddLoading(true);
+    try {
+      const res = await fetch(`/api/stores/${storeData.id}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
+      const json = await res.json() as { item?: Item };
+      if (!res.ok) throw new Error();
+      handleItemAdded(json.item!);
+      setAddValue('');
+      addInputRef.current?.focus();
+    } catch {
+      toast.error('Could not add item');
+    } finally {
+      setAddLoading(false);
+    }
+  };
+
+  // Multiselect helpers
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allSelectedChecked =
+    selectedIds.size > 0 &&
+    [...selectedIds].every((id) => items.find((i) => i.id === id)?.checked);
+
+  const handleBulkCheck = async () => {
+    const ids = [...selectedIds];
+    const checked = !allSelectedChecked;
+    try {
+      const res = await fetch(`/api/stores/${storeData.id}/items/bulk`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, checked }),
+      });
+      if (!res.ok) throw new Error();
+      setItems((prev) => sortItems(prev.map((i) => (selectedIds.has(i.id) ? { ...i, checked } : i))));
+      exitSelectMode();
+    } catch {
+      toast.error('Could not update items');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    const count = ids.length;
+    try {
+      const res = await fetch(`/api/stores/${storeData.id}/items/bulk`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error();
+      setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
+      toast.success(`${count} item${count !== 1 ? 's' : ''} deleted`);
+      exitSelectMode();
+    } catch {
+      toast.error('Could not delete items');
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col" style={{ backgroundColor: 'var(--bg)' }}>
       {/* Cover banner */}
@@ -99,9 +189,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         ) : (
           <InitialsTile name={storeData.name} className="size-full" />
         )}
-        {/* Overlay gradient */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-        {/* Back button */}
         <Link
           href="/stores"
           className="safe-top absolute left-4 top-4 flex size-9 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm"
@@ -109,7 +197,6 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         >
           <ArrowLeft size={18} color="#fff" />
         </Link>
-        {/* Edit button */}
         <div className="absolute right-4 top-4 flex items-center gap-2">
           <div className="rounded-full bg-black/30 backdrop-blur-sm p-1">
             <EditStoreDialog
@@ -119,7 +206,6 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
             />
           </div>
         </div>
-        {/* Store name */}
         <div className="absolute bottom-2 left-4 right-4">
           <h1 className="text-base font-bold text-white drop-shadow">{storeData.name}</h1>
           <p className="text-xs text-white/80">
@@ -128,8 +214,71 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         </div>
       </div>
 
-      {/* Clear checked bar */}
-      {checkedCount > 0 && (
+      {/* Action row: inline add + select toggle */}
+      <div
+        className="flex items-center border-b px-3 py-2"
+        style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
+      >
+        {addingItem ? (
+          <div className="flex flex-1 items-center gap-2">
+            <input
+              ref={addInputRef}
+              type="text"
+              value={addValue}
+              onChange={(e) => setAddValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') { e.preventDefault(); void submitAdd(); }
+                if (e.key === 'Escape') { setAddingItem(false); setAddValue(''); }
+              }}
+              placeholder="Item name…"
+              disabled={addLoading}
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-[color:var(--text-hint)]"
+              style={{ color: 'var(--text)' }}
+              aria-label="New item name"
+            />
+            {addValue.trim() && (
+              <button
+                onClick={() => void submitAdd()}
+                disabled={addLoading}
+                className="rounded-lg px-2 py-1 text-xs font-semibold"
+                style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+              >
+                Add
+              </button>
+            )}
+            <button
+              onClick={() => { setAddingItem(false); setAddValue(''); }}
+              aria-label="Cancel"
+              className="flex size-6 items-center justify-center rounded-lg"
+            >
+              <X size={15} style={{ color: 'var(--text-muted)' }} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={() => { if (!selectMode) setAddingItem(true); }}
+              disabled={selectMode}
+              className="flex items-center gap-1.5"
+              style={{ color: selectMode ? 'var(--text-hint)' : 'var(--accent)' }}
+              aria-label="Add item"
+            >
+              <Plus size={15} />
+              <span className="text-sm font-medium">Add item</span>
+            </button>
+            <button
+              onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+              className="ml-auto text-sm font-medium"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              {selectMode ? 'Done' : 'Select'}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Clear checked bar — hidden in select mode */}
+      {checkedCount > 0 && !selectMode && (
         <div
           className="flex items-center justify-between px-4 py-1.5"
           style={{ backgroundColor: 'var(--accent-soft)', borderBottom: '1px solid var(--border)' }}
@@ -172,7 +321,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
           <div className="mt-10 flex flex-col items-center gap-1.5 text-center px-4">
             <p className="text-base font-medium" style={{ color: 'var(--text)' }}>No items yet</p>
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              Type below to add your first item.
+              Tap + Add item to get started.
             </p>
           </div>
         ) : (
@@ -183,14 +332,50 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
                 item={item}
                 onUpdated={handleItemUpdated}
                 onDeleted={handleItemDeleted}
+                selectMode={selectMode}
+                selected={selectedIds.has(item.id)}
+                onSelect={toggleSelect}
               />
             ))}
           </AnimatePresence>
         )}
       </div>
 
-      {/* Add item — pinned bottom */}
-      <AddItemInput storeId={storeData.id} onAdded={handleItemAdded} />
+      {/* Multiselect bottom action bar */}
+      <AnimatePresence>
+        {selectMode && selectedIds.size > 0 && (
+          <motion.div
+            initial={{ y: 80 }}
+            animate={{ y: 0 }}
+            exit={{ y: 80 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+            className="safe-bottom flex items-center justify-between border-t px-4 py-2.5"
+            style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
+          >
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              {selectedIds.size} selected
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => void handleBulkCheck()}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold"
+                style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+              >
+                <Check size={13} />
+                {allSelectedChecked ? 'Uncheck' : 'Check'}
+              </button>
+              <button
+                onClick={() => void handleBulkDelete()}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold"
+                style={{ backgroundColor: 'rgba(239,68,68,0.1)', color: 'var(--error)' }}
+              >
+                <Trash2 size={13} />
+                Delete
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
