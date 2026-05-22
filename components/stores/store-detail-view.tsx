@@ -333,14 +333,6 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
           disabled={selectMode}
           onAdded={handleItemAdded}
         />
-        {estimatedTotal > 0 && !selectMode && (
-          <span
-            className="ml-3 rounded-full px-2 py-0.5 text-xs font-semibold"
-            style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
-          >
-            Est. ${estimatedTotal.toFixed(2)}
-          </span>
-        )}
         {selectMode ? (
           <div className="ml-auto flex items-center gap-3">
             <button
@@ -469,7 +461,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         className="flex-1 overflow-y-auto"
         style={{
           backgroundColor: 'var(--surface)',
-          paddingBottom: selectMode && selectedIds.size > 0 ? '4rem' : 0,
+          paddingBottom: selectMode && selectedIds.size > 0 ? '4rem' : estimatedTotal > 0 && !selectMode ? '3rem' : 0,
         }}
       >
         {items.length === 0 ? (
@@ -503,6 +495,27 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
           </DndContext>
         )}
       </div>
+
+      {/* Estimated total — fixed bottom bar, hidden when multiselect bar is active */}
+      <AnimatePresence>
+        {estimatedTotal > 0 && !selectMode && (
+          <motion.div
+            initial={{ y: 60 }}
+            animate={{ y: 0 }}
+            exit={{ y: 60 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 35 }}
+            className="safe-bottom fixed bottom-0 left-0 right-0 z-40 flex items-center justify-between border-t px-4 py-2"
+            style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
+          >
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              {items.filter((i) => !i.checked && i.price).length} priced item{items.filter((i) => !i.checked && i.price).length !== 1 ? 's' : ''}
+            </span>
+            <span className="text-sm font-semibold" style={{ color: 'var(--accent)' }}>
+              Est. ${estimatedTotal.toFixed(2)}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Multiselect bottom action bar — fixed to viewport bottom */}
       <AnimatePresence>

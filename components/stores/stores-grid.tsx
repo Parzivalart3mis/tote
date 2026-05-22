@@ -39,7 +39,11 @@ interface StoresGridProps {
 export function StoresGrid({ initialStores }: StoresGridProps) {
   const router = useRouter();
   const [stores, setStores] = useState<StoreRow[]>(initialStores);
-  const [sortMode, setSortMode] = useState<SortMode>('name-asc');
+  const [sortMode, setSortMode] = useState<SortMode>(() => {
+    if (typeof window === 'undefined') return 'name-asc';
+    const saved = localStorage.getItem('tote:stores:sort') as SortMode | null;
+    return saved && SORT_MODES.includes(saved) ? saved : 'name-asc';
+  });
 
   // Sync with fresh server data whenever parent re-renders (covers router.refresh())
   useEffect(() => {
@@ -55,8 +59,9 @@ export function StoresGrid({ initialStores }: StoresGridProps) {
 
   const cycleSortMode = () => {
     setSortMode((prev) => {
-      const idx = SORT_MODES.indexOf(prev);
-      return SORT_MODES[(idx + 1) % SORT_MODES.length]!;
+      const next = SORT_MODES[(SORT_MODES.indexOf(prev) + 1) % SORT_MODES.length]!;
+      localStorage.setItem('tote:stores:sort', next);
+      return next;
     });
   };
 
