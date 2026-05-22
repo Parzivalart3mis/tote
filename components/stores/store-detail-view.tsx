@@ -55,6 +55,22 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
 
   // Shopping mode
   const [shoppingMode, setShoppingMode] = useState(false);
+  const onListCount = items.filter((i) => i.onList).length;
+
+  // "Add running low items to trip" shortcut
+  const handleAddRunningLowToTrip = async () => {
+    const toAdd = items.filter((i) => i.runningLow && !i.onList);
+    if (toAdd.length === 0) { toast('All running low items already on trip'); return; }
+    await Promise.all(toAdd.map((i) =>
+      fetch(`/api/items/${i.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ onList: true }),
+      })
+    ));
+    setItems((prev) => prev.map((i) => i.runningLow && !i.onList ? { ...i, onList: true } : i));
+    toast.success(`${toAdd.length} running low item${toAdd.length !== 1 ? 's' : ''} added to trip`);
+  };
 
   // AI categorize
   const [categorizing, setCategorizing] = useState(false);
@@ -151,6 +167,12 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
     } catch {
       toast.error('Could not clear items');
     }
+  };
+
+  // When entering shopping mode with nothing on the list, show a hint
+  const handleStartShopping = () => {
+    setShoppingMode(true);
+    if (onListCount === 0) toast('Tap the cart icon on items to add them to your trip');
   };
 
   // Multiselect helpers
@@ -272,20 +294,32 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
       {/* Shopping mode banner */}
       {shoppingMode && (
         <div
-          className="flex items-center justify-between px-4 py-2"
+          className="flex items-center justify-between px-4 py-2 gap-2"
           style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
         >
-          <div className="flex items-center gap-2">
-            <ShoppingCart size={15} />
-            <span className="text-sm font-semibold">Shopping mode</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <ShoppingCart size={15} className="shrink-0" />
+            <span className="text-sm font-semibold truncate">
+              {onListCount} item{onListCount !== 1 ? 's' : ''} on trip
+            </span>
           </div>
-          <button
-            onClick={() => setShoppingMode(false)}
-            aria-label="Exit shopping mode"
-            className="flex size-7 items-center justify-center rounded-full bg-white/20"
-          >
-            <X size={14} color="#fff" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {items.some((i) => i.runningLow && !i.onList) && (
+              <button
+                onClick={() => void handleAddRunningLowToTrip()}
+                className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold"
+              >
+                + Running low
+              </button>
+            )}
+            <button
+              onClick={() => setShoppingMode(false)}
+              aria-label="Exit shopping mode"
+              className="flex size-7 items-center justify-center rounded-full bg-white/20"
+            >
+              <X size={14} color="#fff" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -341,12 +375,12 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
             )}
             {!shoppingMode && (
               <button
-                onClick={() => setShoppingMode(true)}
+                onClick={handleStartShopping}
                 className="flex items-center gap-1 text-sm font-medium"
                 style={{ color: 'var(--accent)' }}
               >
                 <ShoppingCart size={14} />
-                Shop
+                Shop{onListCount > 0 ? ` (${onListCount})` : ''}
               </button>
             )}
             <button
@@ -450,7 +484,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
             <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
               <AnimatePresence initial={false}>
                 {items
-                  .filter((i) => !shoppingMode || !i.checked)
+                  .filter((i) => !shoppingMode || i.onList)
                   .filter((i) => !activeCategory || i.category === activeCategory)
                   .map((item) => (
                     <SortableItemRow

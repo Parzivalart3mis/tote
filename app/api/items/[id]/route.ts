@@ -38,6 +38,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if ('price' in parsed.data) updates.price = parsed.data.price ?? null;
   if ('priceUnit' in parsed.data) updates.priceUnit = parsed.data.priceUnit ?? null;
   if ('category' in parsed.data) updates.category = parsed.data.category ?? null;
+  if (parsed.data.onList !== undefined) updates.onList = parsed.data.onList;
   if (parsed.data.checked !== undefined) updates.checked = parsed.data.checked;
   if (parsed.data.favorite !== undefined) updates.favorite = parsed.data.favorite;
   if (parsed.data.runningLow !== undefined) updates.runningLow = parsed.data.runningLow;

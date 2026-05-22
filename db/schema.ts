@@ -51,6 +51,7 @@ export const items = sqliteTable(
     price: text('price'),
     priceUnit: text('price_unit'),
     category: text('category'),
+    onList: integer('on_list', { mode: 'boolean' }).notNull().default(false),
     checked: integer('checked', { mode: 'boolean' }).notNull().default(false),
     favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
     runningLow: integer('running_low', { mode: 'boolean' }).notNull().default(false),

@@ -25,6 +25,7 @@ export const updateItemSchema = z
     price: z.string().max(20).optional().nullable(),
     priceUnit: priceUnitEnum,
     category: categoryEnum,
+    onList: z.boolean().optional(),
     checked: z.boolean().optional(),
     favorite: z.boolean().optional(),
     runningLow: z.boolean().optional(),

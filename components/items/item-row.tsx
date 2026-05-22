@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Check, Star, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
+import { Check, Star, AlertTriangle, Trash2, ShoppingCart } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Item } from '@/db/schema';
 import { EditItemDialog } from './edit-item-dialog';
@@ -39,6 +39,14 @@ export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSe
     }
   };
 
+  // When checking off in shopping mode, also remove from trip list
+  const handleCheck = () => {
+    const newChecked = !item.checked;
+    const updates: Partial<Item> = { checked: newChecked };
+    if (shoppingMode && newChecked) updates.onList = false;
+    void patch(updates);
+  };
+
   const handleDelete = async () => {
     try {
       const res = await fetch(`/api/items/${item.id}`, { method: 'DELETE' });
@@ -68,6 +76,8 @@ export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSe
         cursor: selectMode ? 'pointer' : 'default',
         backgroundColor: selectMode && selected
           ? 'rgba(22,163,74,0.07)'
+          : item.onList
+          ? 'rgba(22,163,74,0.05)'
           : item.favorite
           ? 'rgba(251,191,36,0.06)'
           : item.runningLow
@@ -88,8 +98,8 @@ export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSe
         </div>
       ) : (
         <button
-          onClick={() => patch({ checked: !item.checked })}
-          disabled={loading === 'checked'}
+          onClick={handleCheck}
+          disabled={loading === 'checked' || loading === 'onList'}
           aria-label={item.checked ? 'Uncheck item' : 'Check item'}
           className={`mt-0.5 flex shrink-0 items-center justify-center rounded-full border-2 transition-colors ${shoppingMode ? 'size-7' : 'size-5'}`}
           style={{
@@ -145,41 +155,62 @@ export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSe
       {/* Actions — hidden in select mode */}
       {!selectMode && (
         <div className="flex shrink-0 items-center gap-1">
+          {/* Trip toggle — always visible */}
           <motion.button
-            onClick={() => patch({ favorite: !item.favorite })}
-            aria-label={item.favorite ? 'Remove favorite' : 'Mark favorite'}
+            onClick={() => patch({ onList: !item.onList })}
+            disabled={loading === 'onList'}
+            aria-label={item.onList ? 'Remove from trip' : 'Add to trip'}
             whileTap={{ scale: 0.9 }}
-            animate={{ scale: item.favorite ? [1, 1.1, 1] : 1 }}
+            animate={{ scale: item.onList ? [1, 1.15, 1] : 1 }}
             className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5"
           >
-            <Star
-              size={14}
-              fill={item.favorite ? 'var(--highlight)' : 'none'}
-              style={{ color: item.favorite ? 'var(--highlight)' : 'var(--text-hint)' }}
+            <ShoppingCart
+              size={13}
+              fill={item.onList ? 'var(--accent)' : 'none'}
+              style={{ color: item.onList ? 'var(--accent)' : 'var(--text-hint)' }}
             />
           </motion.button>
-          <motion.button
-            onClick={() => patch({ runningLow: !item.runningLow })}
-            aria-label={item.runningLow ? 'Clear running low' : 'Mark running low'}
-            whileTap={{ scale: 0.9 }}
-            animate={{ scale: item.runningLow ? [1, 1.1, 1] : 1 }}
-            className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5"
-          >
-            <AlertTriangle
-              size={14}
-              fill={item.runningLow ? 'var(--warning)' : 'none'}
-              style={{ color: item.runningLow ? 'var(--warning)' : 'var(--text-hint)' }}
-            />
-          </motion.button>
-          <EditItemDialog item={item} onUpdated={onUpdated} onDeleted={onDeleted} />
-          <motion.button
-            onClick={handleDelete}
-            aria-label="Delete item"
-            whileTap={{ scale: 0.9 }}
-            className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-red-50"
-          >
-            <Trash2 size={13} style={{ color: 'var(--error)' }} />
-          </motion.button>
+
+          {/* Extra actions — hidden in shopping mode to keep it clean */}
+          {!shoppingMode && (
+            <>
+              <motion.button
+                onClick={() => patch({ favorite: !item.favorite })}
+                aria-label={item.favorite ? 'Remove favorite' : 'Mark favorite'}
+                whileTap={{ scale: 0.9 }}
+                animate={{ scale: item.favorite ? [1, 1.1, 1] : 1 }}
+                className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5"
+              >
+                <Star
+                  size={14}
+                  fill={item.favorite ? 'var(--highlight)' : 'none'}
+                  style={{ color: item.favorite ? 'var(--highlight)' : 'var(--text-hint)' }}
+                />
+              </motion.button>
+              <motion.button
+                onClick={() => patch({ runningLow: !item.runningLow })}
+                aria-label={item.runningLow ? 'Clear running low' : 'Mark running low'}
+                whileTap={{ scale: 0.9 }}
+                animate={{ scale: item.runningLow ? [1, 1.1, 1] : 1 }}
+                className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5"
+              >
+                <AlertTriangle
+                  size={14}
+                  fill={item.runningLow ? 'var(--warning)' : 'none'}
+                  style={{ color: item.runningLow ? 'var(--warning)' : 'var(--text-hint)' }}
+                />
+              </motion.button>
+              <EditItemDialog item={item} onUpdated={onUpdated} onDeleted={onDeleted} />
+              <motion.button
+                onClick={handleDelete}
+                aria-label="Delete item"
+                whileTap={{ scale: 0.9 }}
+                className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-red-50"
+              >
+                <Trash2 size={13} style={{ color: 'var(--error)' }} />
+              </motion.button>
+            </>
+          )}
         </div>
       )}
     </motion.div>
