@@ -179,21 +179,6 @@ export function AddItemDialog({ storeId, disabled, onAdded }: AddItemDialogProps
             )}
           </div>
 
-          {/* Category */}
-          <div className="space-y-1.5">
-            <Label style={{ color: 'var(--text-muted)' }}>Category (optional)</Label>
-            <select
-              {...register('category')}
-              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
-              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)', color: 'var(--text)' }}
-            >
-              <option value="">— None —</option>
-              {ITEM_CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
           {/* Price */}
           <div className="space-y-1.5">
             <Label style={{ color: 'var(--text-muted)' }}>Price (optional)</Label>
@@ -229,6 +214,21 @@ export function AddItemDialog({ storeId, disabled, onAdded }: AddItemDialogProps
                 </select>
               )}
             </div>
+          </div>
+
+          {/* Category */}
+          <div className="space-y-1.5">
+            <Label style={{ color: 'var(--text-muted)' }}>Category (optional)</Label>
+            <select
+              {...register('category')}
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)', color: 'var(--text)' }}
+            >
+              <option value="">— None —</option>
+              {ITEM_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
 
           <button

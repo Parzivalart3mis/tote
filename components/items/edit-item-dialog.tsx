@@ -103,21 +103,6 @@ export function EditItemDialog({ item, onUpdated }: EditItemDialogProps) {
             )}
           </div>
 
-          {/* Category */}
-          <div className="space-y-1.5">
-            <Label style={{ color: 'var(--text-muted)' }}>Category (optional)</Label>
-            <select
-              {...register('category')}
-              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
-              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)', color: 'var(--text)' }}
-            >
-              <option value="">— None —</option>
-              {ITEM_CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
           {/* Quantity + Unit */}
           <div className="flex gap-2">
             <div className="flex-1 space-y-1.5">
@@ -184,6 +169,21 @@ export function EditItemDialog({ item, onUpdated }: EditItemDialogProps) {
               placeholder="Any note…"
               style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
             />
+          </div>
+
+          {/* Category */}
+          <div className="space-y-1.5">
+            <Label style={{ color: 'var(--text-muted)' }}>Category (optional)</Label>
+            <select
+              {...register('category')}
+              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
+              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)', color: 'var(--text)' }}
+            >
+              <option value="">— None —</option>
+              {ITEM_CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
 
           <button
