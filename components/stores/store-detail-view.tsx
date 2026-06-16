@@ -358,9 +358,13 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
               </button>
             )}
             {!shoppingMode && (
-              <button onClick={handleStartShopping} className="flex items-center gap-1 text-sm font-medium" style={{ color: 'var(--accent)' }}>
-                <ShoppingCart size={14} />
-                Shop{onListCount > 0 ? ` (${onListCount})` : ''}
+              <button onClick={handleStartShopping} aria-label="Start shopping" className="relative flex size-7 items-center justify-center" style={{ color: 'var(--accent)' }}>
+                <ShoppingCart size={17} />
+                {onListCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex min-w-[15px] h-[15px] items-center justify-center rounded-full px-0.5 text-[10px] font-bold text-white" style={{ backgroundColor: 'var(--accent)' }}>
+                    {onListCount}
+                  </span>
+                )}
               </button>
             )}
             {/* Search toggle */}

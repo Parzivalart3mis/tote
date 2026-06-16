@@ -120,12 +120,11 @@ export function AddItemDialog({ storeId, disabled, onAdded }: AddItemDialogProps
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { reset(); setSuggestions([]); } }}>
       <DialogTrigger
         disabled={disabled}
-        className="flex items-center gap-1.5"
+        className="flex size-8 items-center justify-center rounded-lg"
         style={{ color: disabled ? 'var(--text-hint)' : 'var(--accent)' }}
         aria-label="Add item"
       >
-        <Plus size={15} />
-        <span className="text-sm font-medium">Add item</span>
+        <Plus size={20} />
       </DialogTrigger>
 
       <DialogContent style={{ backgroundColor: 'var(--surface)' }}>
