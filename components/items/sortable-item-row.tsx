@@ -4,6 +4,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
 import type { Item } from '@/db/schema';
+import type { ItemSortMode } from '@/components/stores/store-detail-view';
 import { ItemRow } from './item-row';
 
 interface SortableItemRowProps {
@@ -14,6 +15,7 @@ interface SortableItemRowProps {
   selected?: boolean;
   onSelect?: (id: string) => void;
   shoppingMode?: boolean;
+  sortMode?: ItemSortMode;
 }
 
 export function SortableItemRow(props: SortableItemRowProps) {
@@ -29,7 +31,7 @@ export function SortableItemRow(props: SortableItemRowProps) {
     zIndex: isDragging ? 10 : undefined,
   };
 
-  const showHandle = !props.selectMode && !props.shoppingMode;
+  const showHandle = !props.selectMode && !props.shoppingMode && props.sortMode === 'custom';
 
   return (
     <div ref={setNodeRef} style={style} className="flex items-stretch">

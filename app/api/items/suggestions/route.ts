@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
-import { eq, like, asc } from 'drizzle-orm';
+import { eq, like, desc } from 'drizzle-orm';
 import { db } from '@/db';
 import { items } from '@/db/schema';
 import { apiError, apiOk } from '@/lib/api-helpers';
@@ -23,10 +23,10 @@ export async function GET(req: Request) {
     })
     .from(items)
     .where(eq(items.userId, userId))
-    .orderBy(asc(items.name))
+    .orderBy(desc(items.createdAt))
     .all();
 
-  // Deduplicate by name, keep the most recent occurrence, filter by query
+  // Deduplicate by name, keep the most recently used variant, filter by query
   const seen = new Set<string>();
   const suggestions: typeof rows = [];
   for (const row of rows) {

@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
-import { and, eq, like, or } from 'drizzle-orm';
+import { and, asc, eq, like, or } from 'drizzle-orm';
 import { db } from '@/db';
 import { stores, items } from '@/db/schema';
 import { apiError, apiOk } from '@/lib/api-helpers';
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     .select()
     .from(stores)
     .where(eq(stores.userId, userId))
-    .orderBy(stores.position);
+    .orderBy(stores.position, asc(stores.createdAt));
 
   // Get all matching items
   const matchingItems = await db

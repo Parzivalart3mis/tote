@@ -1,10 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, Check, Trash2, ShoppingCart, X, Sparkles, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft, Check, Trash2, ShoppingCart, X,
+  Sparkles, Loader2, ArrowUpAZ, ArrowDownAZ, GripVertical, Search,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import {
@@ -22,7 +25,6 @@ import { InitialsTile } from '@/components/initials-tile';
 import { SortableItemRow } from '@/components/items/sortable-item-row';
 import { AddItemDialog } from '@/components/items/add-item-dialog';
 import { EditStoreDialog } from './edit-store-dialog';
-import { ITEM_CATEGORIES } from '@/lib/categories';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,29 +37,60 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
+export type ItemSortMode = 'name-asc' | 'name-desc' | 'custom';
+const ITEM_SORT_MODES: ItemSortMode[] = ['name-asc', 'name-desc', 'custom'];
+const SORT_KEY = 'tote:items:sort';
+
+function sortItems(arr: Item[], mode: ItemSortMode): Item[] {
+  return [...arr].sort((a, b) => {
+    if (a.checked !== b.checked) return a.checked ? 1 : -1;
+    if (mode === 'name-asc') return a.name.localeCompare(b.name);
+    if (mode === 'name-desc') return b.name.localeCompare(a.name);
+    return a.position - b.position || a.createdAt.getTime() - b.createdAt.getTime();
+  });
+}
+
 interface StoreDetailViewProps {
   store: Store;
   initialItems: Item[];
 }
 
-function sortItems(arr: Item[]): Item[] {
-  return [...arr].sort((a, b) => {
-    if (a.checked !== b.checked) return a.checked ? 1 : -1;
-    return a.position - b.position || a.createdAt.getTime() - b.createdAt.getTime();
-  });
-}
-
 export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   const router = useRouter();
   const [storeData, setStoreData] = useState(store);
-  const [items, setItems] = useState<Item[]>(sortItems(initialItems));
+
+  // Sort mode — persisted to localStorage
+  const [sortMode, setSortMode] = useState<ItemSortMode>(() => {
+    if (typeof window === 'undefined') return 'name-asc';
+    const saved = localStorage.getItem(SORT_KEY) as ItemSortMode | null;
+    return saved && ITEM_SORT_MODES.includes(saved) ? saved : 'name-asc';
+  });
+
+  const [items, setItems] = useState<Item[]>(() => sortItems(initialItems, (() => {
+    if (typeof window === 'undefined') return 'name-asc';
+    const saved = localStorage.getItem(SORT_KEY) as ItemSortMode | null;
+    return saved && ITEM_SORT_MODES.includes(saved) ? saved : 'name-asc';
+  })()));
+
   const [imgError, setImgError] = useState(false);
+
+  // Search
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const cycleSortMode = () => {
+    setSortMode((prev) => {
+      const next = ITEM_SORT_MODES[(ITEM_SORT_MODES.indexOf(prev) + 1) % ITEM_SORT_MODES.length]!;
+      localStorage.setItem(SORT_KEY, next);
+      setItems((cur) => sortItems(cur, next));
+      return next;
+    });
+  };
 
   // Shopping mode
   const [shoppingMode, setShoppingMode] = useState(false);
   const onListCount = items.filter((i) => i.onList).length;
 
-  // "Add running low items to trip" shortcut
   const handleAddRunningLowToTrip = async () => {
     const toAdd = items.filter((i) => i.runningLow && !i.onList);
     if (toAdd.length === 0) { toast('All running low items already on trip'); return; }
@@ -82,7 +115,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
       const res = await fetch(`/api/stores/${storeData.id}/items/categorize`, { method: 'POST' });
       const json = await res.json() as { categorized?: number; items?: Item[] };
       if (!res.ok) throw new Error();
-      if (json.items) setItems(sortItems(json.items));
+      if (json.items) setItems(sortItems(json.items, sortMode));
       toast.success(`${json.categorized ?? 0} item${json.categorized === 1 ? '' : 's'} categorized`);
     } catch {
       toast.error('Could not categorize items');
@@ -95,19 +128,19 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const usedCategories = [...new Set(items.map((i) => i.category).filter(Boolean))] as string[];
 
-  // Drag to reorder
+  // Drag to reorder (only meaningful in custom sort mode)
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
 
-  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     setItems((prev) => {
       const oldIdx = prev.findIndex((i) => i.id === active.id);
       const newIdx = prev.findIndex((i) => i.id === over.id);
-      const reordered = arrayMove(prev, oldIdx, newIdx);
+      const reordered = sortItems(arrayMove(prev, oldIdx, newIdx), 'custom');
       void fetch(`/api/stores/${storeData.id}/items/reorder`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -117,7 +150,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
     });
   }, [storeData.id]);
 
-  // Multiselect state
+  // Multiselect
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -127,7 +160,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   const showImage = proxyUrl && !imgError;
 
   const handleItemUpdated = (updated: Item) => {
-    setItems((prev) => sortItems(prev.map((i) => (i.id === updated.id ? updated : i))));
+    setItems((prev) => sortItems(prev.map((i) => (i.id === updated.id ? updated : i)), sortMode));
   };
 
   const handleItemDeleted = (id: string) => {
@@ -135,7 +168,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   };
 
   const handleItemAdded = (item: Item) => {
-    setItems((prev) => sortItems([...prev, item]));
+    setItems((prev) => sortItems([...prev, item], sortMode));
   };
 
   const handleStoreUpdated = (updated: { id: string; name: string; coverImageUrl: string | null }) => {
@@ -169,13 +202,11 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
     }
   };
 
-  // When entering shopping mode with nothing on the list, show a hint
   const handleStartShopping = () => {
     setShoppingMode(true);
     if (onListCount === 0) toast('Tap the cart icon on items to add them to your trip');
   };
 
-  // Multiselect helpers
   const exitSelectMode = () => {
     setSelectMode(false);
     setSelectedIds(new Set());
@@ -193,11 +224,8 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   const allSelected = items.length > 0 && selectedIds.size === items.length;
 
   const toggleSelectAll = () => {
-    if (allSelected) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(items.map((i) => i.id)));
-    }
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(items.map((i) => i.id)));
   };
 
   const allSelectedChecked =
@@ -214,7 +242,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         body: JSON.stringify({ ids, checked }),
       });
       if (!res.ok) throw new Error();
-      setItems((prev) => sortItems(prev.map((i) => (selectedIds.has(i.id) ? { ...i, checked } : i))));
+      setItems((prev) => sortItems(prev.map((i) => (selectedIds.has(i.id) ? { ...i, checked } : i)), sortMode));
       exitSelectMode();
     } catch {
       toast.error('Could not update items');
@@ -239,29 +267,26 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
     }
   };
 
+  // Filtered items for render
+  const visibleItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return items
+      .filter((i) => !shoppingMode || i.onList)
+      .filter((i) => !activeCategory || i.category === activeCategory)
+      .filter((i) => {
+        if (!q) return true;
+        return i.name.toLowerCase().includes(q) || (i.note?.toLowerCase().includes(q) ?? false);
+      });
+  }, [items, shoppingMode, activeCategory, searchQuery]);
+
   return (
     <div className="flex min-h-screen flex-col" style={{ backgroundColor: 'var(--bg)' }}>
       {/* Cover banner */}
       <div className="relative h-40 w-full shrink-0 overflow-hidden">
         {showImage ? (
           <>
-            <Image
-              src={proxyUrl}
-              alt=""
-              fill
-              unoptimized
-              aria-hidden
-              className="object-cover scale-110 blur-xl brightness-75"
-            />
-            <Image
-              src={proxyUrl}
-              alt={storeData.name}
-              fill
-              unoptimized
-              className="object-contain"
-              onError={() => setImgError(true)}
-              priority
-            />
+            <Image src={proxyUrl} alt="" fill unoptimized aria-hidden className="object-cover scale-110 blur-xl brightness-75" />
+            <Image src={proxyUrl} alt={storeData.name} fill unoptimized className="object-contain" onError={() => setImgError(true)} priority />
           </>
         ) : (
           <InitialsTile name={storeData.name} className="size-full" />
@@ -276,11 +301,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         </Link>
         <div className="absolute right-4 top-4 flex items-center gap-2">
           <div className="rounded-full bg-black/30 backdrop-blur-sm p-1">
-            <EditStoreDialog
-              store={storeData}
-              onUpdated={handleStoreUpdated}
-              onDeleted={handleStoreDeleted}
-            />
+            <EditStoreDialog store={storeData} onUpdated={handleStoreUpdated} onDeleted={handleStoreDeleted} />
           </div>
         </div>
         <div className="absolute bottom-2 left-4 right-4">
@@ -293,30 +314,18 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
 
       {/* Shopping mode banner */}
       {shoppingMode && (
-        <div
-          className="flex items-center justify-between px-4 py-2 gap-2"
-          style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
-        >
+        <div className="flex items-center justify-between px-4 py-2 gap-2" style={{ backgroundColor: 'var(--accent)', color: '#fff' }}>
           <div className="flex items-center gap-2 min-w-0">
             <ShoppingCart size={15} className="shrink-0" />
-            <span className="text-sm font-semibold truncate">
-              {onListCount} item{onListCount !== 1 ? 's' : ''} on trip
-            </span>
+            <span className="text-sm font-semibold truncate">{onListCount} item{onListCount !== 1 ? 's' : ''} on trip</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {items.some((i) => i.runningLow && !i.onList) && (
-              <button
-                onClick={() => void handleAddRunningLowToTrip()}
-                className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold"
-              >
+              <button onClick={() => void handleAddRunningLowToTrip()} className="rounded-full bg-white/20 px-2.5 py-1 text-xs font-semibold">
                 + Running low
               </button>
             )}
-            <button
-              onClick={() => setShoppingMode(false)}
-              aria-label="Exit shopping mode"
-              className="flex size-7 items-center justify-center rounded-full bg-white/20"
-            >
+            <button onClick={() => setShoppingMode(false)} aria-label="Exit shopping mode" className="flex size-7 items-center justify-center rounded-full bg-white/20">
               <X size={14} color="#fff" />
             </button>
           </div>
@@ -324,34 +333,19 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
       )}
 
       {/* Action row */}
-      <div
-        className="flex items-center border-b px-3 py-2"
-        style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
-      >
-        <AddItemDialog
-          storeId={storeData.id}
-          disabled={selectMode}
-          onAdded={handleItemAdded}
-        />
+      <div className="flex items-center border-b px-3 py-2" style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}>
+        <AddItemDialog storeId={storeData.id} disabled={selectMode} onAdded={handleItemAdded} />
         {selectMode ? (
           <div className="ml-auto flex items-center gap-3">
-            <button
-              onClick={toggleSelectAll}
-              className="text-sm font-medium"
-              style={{ color: 'var(--accent)' }}
-            >
+            <button onClick={toggleSelectAll} className="text-sm font-medium" style={{ color: 'var(--accent)' }}>
               {allSelected ? 'Deselect all' : 'Select all'}
             </button>
-            <button
-              onClick={exitSelectMode}
-              className="text-sm font-medium"
-              style={{ color: 'var(--text-muted)' }}
-            >
+            <button onClick={exitSelectMode} className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
               Done
             </button>
           </div>
         ) : (
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2">
             {uncategorizedCount > 0 && !shoppingMode && (
               <button
                 onClick={() => void handleCategorize()}
@@ -359,47 +353,82 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
                 className="flex items-center gap-1 text-sm font-medium disabled:opacity-60"
                 style={{ color: 'var(--accent)' }}
               >
-                {categorizing
-                  ? <Loader2 size={14} className="animate-spin" />
-                  : <Sparkles size={14} />}
+                {categorizing ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                 {categorizing ? 'Categorizing…' : 'Categorize'}
               </button>
             )}
             {!shoppingMode && (
-              <button
-                onClick={handleStartShopping}
-                className="flex items-center gap-1 text-sm font-medium"
-                style={{ color: 'var(--accent)' }}
-              >
+              <button onClick={handleStartShopping} className="flex items-center gap-1 text-sm font-medium" style={{ color: 'var(--accent)' }}>
                 <ShoppingCart size={14} />
                 Shop{onListCount > 0 ? ` (${onListCount})` : ''}
               </button>
             )}
+            {/* Search toggle */}
             <button
-              onClick={() => setSelectMode(true)}
-              className="text-sm font-medium"
-              style={{ color: 'var(--text-muted)' }}
+              onClick={() => { setSearchOpen((v) => !v); if (searchOpen) setSearchQuery(''); }}
+              aria-label="Search items"
+              className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5"
+              style={{ color: searchOpen ? 'var(--accent)' : 'var(--text-muted)' }}
             >
+              <Search size={15} />
+            </button>
+            {/* Sort toggle */}
+            <button
+              onClick={cycleSortMode}
+              aria-label="Change item sort"
+              className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5"
+              style={{ color: 'var(--text-muted)' }}
+              title={sortMode === 'name-asc' ? 'A–Z' : sortMode === 'name-desc' ? 'Z–A' : 'Custom order'}
+            >
+              {sortMode === 'name-asc' && <ArrowUpAZ size={15} />}
+              {sortMode === 'name-desc' && <ArrowDownAZ size={15} />}
+              {sortMode === 'custom' && <GripVertical size={15} />}
+            </button>
+            <button onClick={() => setSelectMode(true)} className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>
               Select
             </button>
           </div>
         )}
       </div>
 
-      {/* Clear checked bar — hidden in select mode */}
+      {/* Search bar */}
+      <AnimatePresence>
+        {searchOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+            style={{ backgroundColor: 'var(--surface)', borderBottom: '1px solid var(--border)' }}
+          >
+            <div className="flex items-center gap-2 px-3 py-2">
+              <Search size={14} style={{ color: 'var(--text-hint)' }} className="shrink-0" />
+              <input
+                autoFocus
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search items…"
+                className="flex-1 bg-transparent text-sm outline-none"
+                style={{ color: 'var(--text)' }}
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} aria-label="Clear search" style={{ color: 'var(--text-hint)' }}>
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Clear checked bar */}
       {checkedCount > 0 && !selectMode && (
-        <div
-          className="flex items-center justify-between px-4 py-1.5"
-          style={{ backgroundColor: 'var(--accent-soft)', borderBottom: '1px solid var(--border)' }}
-        >
-          <span className="text-sm" style={{ color: 'var(--accent)' }}>
-            {checkedCount} checked
-          </span>
+        <div className="flex items-center justify-between px-4 py-1.5" style={{ backgroundColor: 'var(--accent-soft)', borderBottom: '1px solid var(--border)' }}>
+          <span className="text-sm" style={{ color: 'var(--accent)' }}>{checkedCount} checked</span>
           <AlertDialog>
-            <AlertDialogTrigger
-              className="flex items-center gap-1.5 text-sm font-medium"
-              style={{ color: 'var(--accent)' }}
-            >
+            <AlertDialogTrigger className="flex items-center gap-1.5 text-sm font-medium" style={{ color: 'var(--accent)' }}>
               <Trash2 size={14} />
               Clear
             </AlertDialogTrigger>
@@ -412,12 +441,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={clearChecked}
-                  style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
-                >
-                  Clear
-                </AlertDialogAction>
+                <AlertDialogAction onClick={clearChecked} style={{ backgroundColor: 'var(--accent)', color: '#fff' }}>Clear</AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
@@ -426,17 +450,11 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
 
       {/* Category filter chips */}
       {usedCategories.length > 0 && !selectMode && (
-        <div
-          className="flex gap-2 overflow-x-auto px-3 py-2 scrollbar-none"
-          style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}
-        >
+        <div className="flex gap-2 overflow-x-auto px-3 py-2 scrollbar-none" style={{ borderBottom: '1px solid var(--border)', backgroundColor: 'var(--surface)' }}>
           <button
             onClick={() => setActiveCategory(null)}
             className="shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors"
-            style={{
-              backgroundColor: activeCategory === null ? 'var(--accent)' : 'var(--accent-soft)',
-              color: activeCategory === null ? '#fff' : 'var(--accent)',
-            }}
+            style={{ backgroundColor: activeCategory === null ? 'var(--accent)' : 'var(--accent-soft)', color: activeCategory === null ? '#fff' : 'var(--accent)' }}
           >
             All
           </button>
@@ -445,10 +463,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
               key={cat}
               onClick={() => setActiveCategory(activeCategory === cat ? null : cat)}
               className="shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors"
-              style={{
-                backgroundColor: activeCategory === cat ? 'var(--accent)' : 'var(--accent-soft)',
-                color: activeCategory === cat ? '#fff' : 'var(--accent)',
-              }}
+              style={{ backgroundColor: activeCategory === cat ? 'var(--accent)' : 'var(--accent-soft)', color: activeCategory === cat ? '#fff' : 'var(--accent)' }}
             >
               {cat}
             </button>
@@ -456,7 +471,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         </div>
       )}
 
-      {/* Item list — add bottom padding when multiselect bar is visible */}
+      {/* Item list */}
       <div
         className="flex-1 overflow-y-auto"
         style={{
@@ -464,39 +479,39 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
           paddingBottom: selectMode && selectedIds.size > 0 ? '4rem' : estimatedTotal > 0 && !selectMode ? '3rem' : 0,
         }}
       >
-        {items.length === 0 ? (
+        {visibleItems.length === 0 ? (
           <div className="mt-10 flex flex-col items-center gap-1.5 text-center px-4">
-            <p className="text-base font-medium" style={{ color: 'var(--text)' }}>No items yet</p>
+            <p className="text-base font-medium" style={{ color: 'var(--text)' }}>
+              {searchQuery ? 'No items match your search' : 'No items yet'}
+            </p>
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              Tap + Add item to get started.
+              {searchQuery ? 'Try a different search term.' : 'Tap + Add item to get started.'}
             </p>
           </div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
               <AnimatePresence initial={false}>
-                {items
-                  .filter((i) => !shoppingMode || i.onList)
-                  .filter((i) => !activeCategory || i.category === activeCategory)
-                  .map((item) => (
-                    <SortableItemRow
-                      key={item.id}
-                      item={item}
-                      onUpdated={handleItemUpdated}
-                      onDeleted={handleItemDeleted}
-                      selectMode={selectMode}
-                      selected={selectedIds.has(item.id)}
-                      onSelect={toggleSelect}
-                      shoppingMode={shoppingMode}
-                    />
-                  ))}
+                {visibleItems.map((item) => (
+                  <SortableItemRow
+                    key={item.id}
+                    item={item}
+                    onUpdated={handleItemUpdated}
+                    onDeleted={handleItemDeleted}
+                    selectMode={selectMode}
+                    selected={selectedIds.has(item.id)}
+                    onSelect={toggleSelect}
+                    shoppingMode={shoppingMode}
+                    sortMode={sortMode}
+                  />
+                ))}
               </AnimatePresence>
             </SortableContext>
           </DndContext>
         )}
       </div>
 
-      {/* Estimated total — fixed bottom bar, hidden when multiselect bar is active */}
+      {/* Estimated total — fixed bottom bar */}
       <AnimatePresence>
         {estimatedTotal > 0 && !selectMode && (
           <motion.div
@@ -517,7 +532,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
         )}
       </AnimatePresence>
 
-      {/* Multiselect bottom action bar — fixed to viewport bottom */}
+      {/* Multiselect bottom bar */}
       <AnimatePresence>
         {selectMode && selectedIds.size > 0 && (
           <motion.div
@@ -528,9 +543,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
             className="safe-bottom fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t px-4 py-2.5"
             style={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)' }}
           >
-            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              {selectedIds.size} selected
-            </span>
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>{selectedIds.size} selected</span>
             <div className="flex gap-2">
               <button
                 onClick={() => void handleBulkCheck()}
