@@ -46,7 +46,7 @@ function sortItems(arr: Item[], mode: ItemSortMode): Item[] {
     if (a.checked !== b.checked) return a.checked ? 1 : -1;
     if (mode === 'name-asc') return a.name.localeCompare(b.name);
     if (mode === 'name-desc') return b.name.localeCompare(a.name);
-    return a.position - b.position || a.createdAt.getTime() - b.createdAt.getTime();
+    return a.position - b.position || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 }
 
