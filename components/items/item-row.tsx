@@ -200,7 +200,7 @@ export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSe
                   style={{ color: item.runningLow ? 'var(--warning)' : 'var(--text-hint)' }}
                 />
               </motion.button>
-              <EditItemDialog item={item} onUpdated={onUpdated} onDeleted={onDeleted} />
+              <EditItemDialog key={item.updatedAt.getTime()} item={item} onUpdated={onUpdated} onDeleted={onDeleted} />
               <motion.button
                 onClick={handleDelete}
                 aria-label="Delete item"
