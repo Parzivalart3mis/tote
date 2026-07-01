@@ -193,12 +193,12 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
   const clearChecked = async () => {
     try {
       const res = await fetch(`/api/stores/${storeData.id}/clear-checked`, { method: 'POST' });
-      const json = await res.json() as { deleted?: number };
+      const json = await res.json() as { updated?: number };
       if (!res.ok) throw new Error();
-      setItems((prev) => prev.filter((i) => !i.checked));
-      toast.success(`${json.deleted ?? 0} item${json.deleted === 1 ? '' : 's'} cleared`);
+      setItems((prev) => sortItems(prev.map((i) => i.checked ? { ...i, checked: false } : i), sortMode));
+      toast.success(`${json.updated ?? 0} item${json.updated === 1 ? '' : 's'} unchecked`);
     } catch {
-      toast.error('Could not clear items');
+      toast.error('Could not uncheck items');
     }
   };
 
@@ -438,9 +438,9 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
             </AlertDialogTrigger>
             <AlertDialogContent style={{ backgroundColor: 'var(--surface)' }}>
               <AlertDialogHeader>
-                <AlertDialogTitle>Clear checked items?</AlertDialogTitle>
+                <AlertDialogTitle>Uncheck all checked items?</AlertDialogTitle>
                 <AlertDialogDescription style={{ color: 'var(--text-muted)' }}>
-                  This will remove {checkedCount} checked item{checkedCount !== 1 ? 's' : ''} from {storeData.name}.
+                  This will uncheck {checkedCount} item{checkedCount !== 1 ? 's' : ''} in {storeData.name}. Nothing will be deleted.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>

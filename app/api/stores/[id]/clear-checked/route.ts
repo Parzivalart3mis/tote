@@ -23,10 +23,11 @@ export async function POST(_req: Request, { params }: Params) {
     .get();
   if (!store) return apiError('NOT_FOUND', 'Store not found', 404);
 
-  const deleted = await db
-    .delete(items)
+  const updated = await db
+    .update(items)
+    .set({ checked: false })
     .where(and(eq(items.storeId, storeId), eq(items.userId, userId), eq(items.checked, true)))
     .returning();
 
-  return apiOk({ deleted: deleted.length });
+  return apiOk({ updated: updated.length });
 }
