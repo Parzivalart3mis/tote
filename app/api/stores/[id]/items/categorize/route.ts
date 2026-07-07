@@ -84,8 +84,27 @@ export async function POST(_req: Request, { params }: Params) {
 
     const raw = completion.choices[0]?.message?.content?.trim() ?? '';
     // Strip markdown code fences if model wraps output
-    const json = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const obj = JSON.parse(json) as Record<string, unknown>;
+    const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+
+    let obj: Record<string, unknown>;
+    try {
+      obj = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      // Fallback: model returned NDJSON (one {"id":"...","category":"..."} per line)
+      const ndResult: Record<string, string> = {};
+      for (const line of text.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const lineObj = JSON.parse(trimmed) as Record<string, unknown>;
+          if (typeof lineObj.id === 'string' && typeof lineObj.category === 'string') {
+            ndResult[lineObj.id] = lineObj.category;
+          }
+        } catch { /* skip malformed lines */ }
+      }
+      obj = ndResult;
+    }
+
     const result = responseSchema.parse(obj);
     parsed = result as Record<string, string>;
   } catch {

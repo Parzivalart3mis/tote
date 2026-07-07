@@ -115,7 +115,7 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
       const res = await fetch(`/api/stores/${storeData.id}/items/categorize`, { method: 'POST' });
       const json = await res.json() as { categorized?: number; items?: Item[] };
       if (!res.ok) throw new Error();
-      if (json.items) setItems(sortItems(json.items, sortMode));
+      if (json.items && json.items.length > 0) setItems(sortItems(json.items, sortMode));
       toast.success(`${json.categorized ?? 0} item${json.categorized === 1 ? '' : 's'} categorized`);
     } catch {
       toast.error('Could not categorize items');
