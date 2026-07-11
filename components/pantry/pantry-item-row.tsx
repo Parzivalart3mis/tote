@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Package, PackageOpen, Trash2, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryItem } from '@/db/schema';
@@ -14,17 +14,36 @@ interface PantryItemRowProps {
   onUpdated: (item: PantryItem) => void;
   onDeleted: (id: string) => void;
   showHandle: boolean;
+  entryDelay?: number;
+  isNew?: boolean;
 }
 
-export function PantryItemRow({ item, onUpdated, onDeleted, showHandle }: PantryItemRowProps) {
+export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDelay = 0, isNew }: PantryItemRowProps) {
   const [loading, setLoading] = useState(false);
+  // Increments on each toggle press so the pulse ring re-fires exactly once per interaction
+  const [pulseKey, setPulseKey] = useState(0);
+  const nodeRef = useRef<HTMLDivElement | null>(null);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
 
-  const style = {
+  const setRefs = useCallback((node: HTMLDivElement | null) => {
+    setNodeRef(node);
+    nodeRef.current = node;
+  }, [setNodeRef]);
+
+  // Newly added item: bring it into view
+  useEffect(() => {
+    if (!isNew || !nodeRef.current) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    nodeRef.current.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
+  }, [isNew]);
+
+  const dragStyle = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
+    opacity: isDragging ? 0.55 : undefined,
+    zIndex: isDragging ? 10 : undefined,
+    boxShadow: isDragging ? '0 8px 24px -6px rgba(0,0,0,0.18)' : undefined,
   };
 
   const patch = async (updates: Partial<PantryItem>) => {
@@ -45,12 +64,16 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle }: Pantry
     }
   };
 
+  const handleToggleOut = () => {
+    setPulseKey((k) => k + 1);
+    void patch({ isOut: !item.isOut });
+  };
+
   const handleDelete = async () => {
     try {
       const res = await fetch(`/api/pantry/items/${item.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       onDeleted(item.id);
-      toast.success(`${item.name} removed`);
     } catch {
       toast.error('Could not delete item');
     }
@@ -58,84 +81,134 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle }: Pantry
 
   return (
     <motion.div
-      ref={setNodeRef}
-      style={{ ...style, borderBottom: '1px solid var(--border)' }}
+      ref={setRefs}
+      style={{ ...dragStyle, position: 'relative' }}
       layout
-      initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, height: 0 }}
-      transition={{ layout: { duration: 0.2 }, opacity: { duration: 0.15 } }}
-      className="flex items-center gap-2.5 px-3 py-2.5"
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -24, transition: { duration: 0.18 } }}
+      transition={{ type: 'spring', stiffness: 420, damping: 32, delay: entryDelay }}
+      className="group flex items-center gap-2.5 border-b px-3.5 py-2.5 transition-colors last:border-b-0 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]"
     >
+      {/* Flash highlight for a just-added item */}
+      {isNew && (
+        <motion.span
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{ backgroundColor: 'var(--accent-soft)' }}
+          initial={{ opacity: 0.6 }}
+          animate={{ opacity: 0 }}
+          transition={{ duration: 1.4, ease: 'easeOut' }}
+        />
+      )}
+
       {/* Drag handle */}
       {showHandle && (
         <button
           {...attributes}
           {...listeners}
-          className="shrink-0 cursor-grab touch-none active:cursor-grabbing"
+          className="relative shrink-0 cursor-grab touch-none opacity-60 transition-opacity hover:opacity-100 active:cursor-grabbing"
           aria-label="Drag to reorder"
         >
           <GripVertical size={14} style={{ color: 'var(--text-hint)' }} />
         </button>
       )}
 
-      {/* Out toggle */}
+      {/* Stock toggle — icon morph + pulse ring */}
       <motion.button
-        onClick={() => void patch({ isOut: !item.isOut })}
+        onClick={handleToggleOut}
         disabled={loading}
-        whileTap={{ scale: 0.88 }}
+        whileTap={{ scale: 0.82 }}
         aria-label={item.isOut ? 'Mark as in stock' : 'Mark as out'}
-        className="shrink-0 transition-opacity disabled:opacity-40"
         title={item.isOut ? 'Mark as in stock' : 'Mark as out'}
+        className="relative flex size-8 shrink-0 items-center justify-center rounded-full transition-opacity disabled:opacity-40"
+        style={{
+          backgroundColor: item.isOut ? 'rgba(220,38,38,0.1)' : 'var(--accent-soft)',
+        }}
       >
-        {item.isOut ? (
-          <PackageOpen size={18} style={{ color: 'var(--error, #ef4444)' }} />
-        ) : (
-          <Package size={18} style={{ color: 'var(--accent)' }} />
+        {pulseKey > 0 && (
+          <motion.span
+            key={pulseKey}
+            aria-hidden
+            className="absolute inset-0 rounded-full border-2"
+            style={{ borderColor: item.isOut ? 'var(--error)' : 'var(--accent)' }}
+            initial={{ scale: 1, opacity: 0.7 }}
+            animate={{ scale: 1.7, opacity: 0 }}
+            transition={{ duration: 0.5, ease: 'easeOut' }}
+          />
         )}
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.span
+            key={item.isOut ? 'out' : 'in'}
+            initial={{ scale: 0.4, rotate: -50, opacity: 0 }}
+            animate={{ scale: 1, rotate: 0, opacity: 1 }}
+            exit={{ scale: 0.4, rotate: 50, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 600, damping: 30 }}
+            className="flex"
+          >
+            {item.isOut ? (
+              <PackageOpen size={16} style={{ color: 'var(--error)' }} />
+            ) : (
+              <Package size={16} style={{ color: 'var(--accent)' }} />
+            )}
+          </motion.span>
+        </AnimatePresence>
       </motion.button>
 
       {/* Content */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-1.5 flex-wrap">
+      <div className="relative min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
           <span
-            className="text-sm font-medium"
-            style={{
-              color: item.isOut ? 'var(--text-muted)' : 'var(--text)',
-              textDecoration: item.isOut ? 'line-through' : 'none',
-            }}
+            className="relative text-sm font-medium transition-colors duration-300"
+            style={{ color: item.isOut ? 'var(--text-muted)' : 'var(--text)' }}
           >
             {item.name}
+            {/* Strike-through draws itself across on toggle */}
+            <motion.span
+              aria-hidden
+              className="absolute left-0 top-1/2 h-[1.5px] -translate-y-1/2 rounded-full"
+              style={{ backgroundColor: 'var(--text-muted)' }}
+              initial={false}
+              animate={{ width: item.isOut ? '100%' : '0%' }}
+              transition={{ duration: 0.28, ease: 'easeOut' }}
+            />
           </span>
           {(item.quantity || item.unit) && (
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            <span className="text-xs tabular-nums" style={{ color: 'var(--text-muted)' }}>
               {[item.quantity, item.unit].filter(Boolean).join(' ')}
             </span>
           )}
           {item.category && (
             <span
-              className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+              className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
               style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
             >
+              <span className="size-1 rounded-full" style={{ backgroundColor: 'var(--accent)' }} />
               {item.category}
             </span>
           )}
-          {item.isOut && (
-            <span
-              className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
-              style={{ backgroundColor: 'rgba(239,68,68,0.12)', color: 'var(--error, #ef4444)' }}
-            >
-              out
-            </span>
-          )}
+          <AnimatePresence>
+            {item.isOut && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.7 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.7 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+                className="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                style={{ backgroundColor: 'rgba(220,38,38,0.12)', color: 'var(--error)' }}
+              >
+                out
+              </motion.span>
+            )}
+          </AnimatePresence>
         </div>
         {item.note && (
-          <p className="mt-0.5 text-xs" style={{ color: 'var(--text-hint)' }}>{item.note}</p>
+          <p className="mt-0.5 truncate text-xs" style={{ color: 'var(--text-hint)' }}>{item.note}</p>
         )}
       </div>
 
       {/* Actions */}
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="relative flex shrink-0 items-center gap-0.5">
         <EditPantryItemDialog
           key={new Date(item.updatedAt).getTime()}
           item={item}
@@ -144,8 +217,8 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle }: Pantry
         <motion.button
           onClick={handleDelete}
           aria-label="Delete item"
-          whileTap={{ scale: 0.9 }}
-          className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-red-50"
+          whileTap={{ scale: 0.85 }}
+          className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-red-500/10"
         >
           <Trash2 size={13} style={{ color: 'var(--error)' }} />
         </motion.button>

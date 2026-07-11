@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { Pencil } from 'lucide-react';
+import { Pencil, Check, Loader2, ChevronDown } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -23,9 +24,13 @@ interface EditPantryItemDialogProps {
   onUpdated: (item: PantryItem) => void;
 }
 
+const inputStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--bg)' } as const;
+const inputFocusClass = 'transition-shadow focus:shadow-[0_0_0_3px_var(--accent-soft)]';
+
 export function EditPantryItemDialog({ item, onUpdated }: EditPantryItemDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   const {
     register,
@@ -59,8 +64,12 @@ export function EditPantryItemDialog({ item, onUpdated }: EditPantryItemDialogPr
       const json = (await res.json()) as { item?: PantryItem };
       if (!res.ok) throw new Error();
       onUpdated(json.item!);
-      setOpen(false);
+      setSuccess(true);
       toast.success('Item updated');
+      setTimeout(() => {
+        setOpen(false);
+        setSuccess(false);
+      }, 450);
     } catch {
       toast.error('Could not update item');
     } finally {
@@ -68,11 +77,13 @@ export function EditPantryItemDialog({ item, onUpdated }: EditPantryItemDialogPr
     }
   };
 
+  const buttonState = success ? 'success' : loading ? 'loading' : 'idle';
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setSuccess(false); }}>
       <DialogTrigger
         aria-label="Edit pantry item"
-        className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5"
+        className="flex size-7 items-center justify-center rounded-lg transition-all hover:scale-110 hover:bg-black/5 active:scale-90 dark:hover:bg-white/5"
       >
         <Pencil size={13} style={{ color: 'var(--text-hint)' }} />
       </DialogTrigger>
@@ -86,11 +97,22 @@ export function EditPantryItemDialog({ item, onUpdated }: EditPantryItemDialogPr
             <Input
               {...register('name')}
               autoFocus
-              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
+              className={inputFocusClass}
+              style={inputStyle}
             />
-            {errors.name && (
-              <p className="text-xs" style={{ color: 'var(--error)' }}>{errors.name.message}</p>
-            )}
+            <AnimatePresence>
+              {errors.name && (
+                <motion.p
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="text-xs"
+                  style={{ color: 'var(--error)' }}
+                >
+                  {errors.name.message}
+                </motion.p>
+              )}
+            </AnimatePresence>
           </div>
 
           <div className="flex gap-2">
@@ -99,7 +121,8 @@ export function EditPantryItemDialog({ item, onUpdated }: EditPantryItemDialogPr
               <Input
                 {...register('quantity')}
                 placeholder="2"
-                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
+                className={inputFocusClass}
+                style={inputStyle}
               />
             </div>
             <div className="flex-1 space-y-1.5">
@@ -107,23 +130,31 @@ export function EditPantryItemDialog({ item, onUpdated }: EditPantryItemDialogPr
               <Input
                 {...register('unit')}
                 placeholder="bottles"
-                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
+                className={inputFocusClass}
+                style={inputStyle}
               />
             </div>
           </div>
 
           <div className="space-y-1.5">
             <Label style={{ color: 'var(--text-muted)' }}>Category (optional)</Label>
-            <select
-              {...register('category', { setValueAs: (v: string) => v || undefined })}
-              className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
-              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)', color: 'var(--text)' }}
-            >
-              <option value="">— None —</option>
-              {ITEM_CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                {...register('category', { setValueAs: (v: string) => v || undefined })}
+                className={`w-full appearance-none rounded-xl border px-3 py-2 pr-8 text-sm outline-none ${inputFocusClass}`}
+                style={{ ...inputStyle, color: 'var(--text)' }}
+              >
+                <option value="">— None —</option>
+                {ITEM_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <ChevronDown
+                size={14}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
+                style={{ color: 'var(--text-hint)' }}
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -131,18 +162,53 @@ export function EditPantryItemDialog({ item, onUpdated }: EditPantryItemDialogPr
             <Input
               {...register('note')}
               placeholder="Any note…"
-              style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
+              className={inputFocusClass}
+              style={inputStyle}
             />
           </div>
 
-          <button
+          <motion.button
             type="submit"
-            disabled={loading}
-            className="w-full rounded-xl py-2 text-sm font-medium text-white transition-opacity disabled:opacity-60"
+            disabled={loading || success}
+            whileTap={{ scale: 0.97 }}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-2 text-sm font-medium text-white transition-colors disabled:opacity-90"
             style={{ backgroundColor: 'var(--accent)' }}
           >
-            {loading ? 'Saving…' : 'Save'}
-          </button>
+            <AnimatePresence mode="popLayout" initial={false}>
+              {buttonState === 'success' ? (
+                <motion.span
+                  key="success"
+                  initial={{ scale: 0.3, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', stiffness: 600, damping: 22 }}
+                  className="flex items-center gap-1.5"
+                >
+                  <Check size={15} strokeWidth={3} />
+                  Saved
+                </motion.span>
+              ) : buttonState === 'loading' ? (
+                <motion.span
+                  key="loading"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center gap-1.5"
+                >
+                  <Loader2 size={14} className="animate-spin" />
+                  Saving…
+                </motion.span>
+              ) : (
+                <motion.span
+                  key="idle"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                >
+                  Save
+                </motion.span>
+              )}
+            </AnimatePresence>
+          </motion.button>
         </form>
       </DialogContent>
     </Dialog>
