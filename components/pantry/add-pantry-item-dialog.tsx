@@ -115,7 +115,7 @@ export function AddPantryItemDialog({ onAdded }: AddPantryItemDialogProps) {
           <div className="space-y-1.5">
             <Label style={{ color: 'var(--text-muted)' }}>Category (optional)</Label>
             <select
-              {...register('category')}
+              {...register('category', { setValueAs: (v: string) => v || undefined })}
               className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
               style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)', color: 'var(--text)' }}
             >

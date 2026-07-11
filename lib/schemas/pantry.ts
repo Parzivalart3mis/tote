@@ -1,10 +1,7 @@
 import { z } from 'zod';
 import { ITEM_CATEGORIES } from '@/lib/categories';
 
-const categoryEnum = z.preprocess(
-  (v) => (v === '' ? undefined : v),
-  z.enum(ITEM_CATEGORIES as unknown as [string, ...string[]]).optional().nullable()
-);
+const categoryEnum = z.enum(ITEM_CATEGORIES as unknown as [string, ...string[]]).optional().nullable();
 
 export const createPantryItemSchema = z
   .object({
