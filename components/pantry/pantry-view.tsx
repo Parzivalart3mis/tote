@@ -378,10 +378,17 @@ export function PantryView({ initialItems }: PantryViewProps) {
                   className="overflow-hidden rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.03),0_4px_16px_-4px_rgba(0,0,0,0.06)]"
                   style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
                 >
-                  {/* In stock section */}
-                  {inStockItems.length > 0 && (
-                    <>
-                      <div
+                  {/* Single AnimatePresence for both sections: a toggled item keeps its
+                      key and glides between sections via layout animation instead of
+                      unmounting/remounting (which desyncs presence + duplicate sortable ids) */}
+                  <AnimatePresence initial={firstMount.current}>
+                    {inStockItems.length > 0 && (
+                      <motion.div
+                        key="header-in"
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                         className="flex items-center gap-1.5 border-b px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.08em]"
                         style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
                       >
@@ -393,34 +400,30 @@ export function PantryView({ initialItems }: PantryViewProps) {
                         >
                           <AnimatedCount value={inStockItems.length} />
                         </span>
-                      </div>
-                      <AnimatePresence initial={firstMount.current}>
-                        {inStockItems.map((item, idx) => (
-                          <PantryItemRow
-                            key={item.id}
-                            item={item}
-                            onUpdated={handleUpdated}
-                            onDeleted={handleDeleted}
-                            showHandle={!searchQuery}
-                            entryDelay={entryDelay(idx)}
-                            isNew={item.id === newItemId}
-                          />
-                        ))}
-                      </AnimatePresence>
-                    </>
-                  )}
+                      </motion.div>
+                    )}
 
-                  {/* Out section */}
-                  {outItems.length > 0 && (
-                    <>
-                      <div
+                    {inStockItems.map((item, idx) => (
+                      <PantryItemRow
+                        key={item.id}
+                        item={item}
+                        onUpdated={handleUpdated}
+                        onDeleted={handleDeleted}
+                        showHandle={!searchQuery}
+                        entryDelay={entryDelay(idx)}
+                        isNew={item.id === newItemId}
+                      />
+                    ))}
+
+                    {outItems.length > 0 && (
+                      <motion.div
+                        key="header-out"
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
                         className="flex items-center gap-1.5 border-b px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.08em]"
-                        style={{
-                          backgroundColor: 'var(--bg)',
-                          borderColor: 'var(--border)',
-                          borderTop: inStockItems.length > 0 ? '1px solid var(--border)' : undefined,
-                          color: 'var(--error)',
-                        }}
+                        style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--error)' }}
                       >
                         <PackageOpen size={11} />
                         Out
@@ -430,27 +433,24 @@ export function PantryView({ initialItems }: PantryViewProps) {
                         >
                           <AnimatedCount value={outItems.length} />
                         </span>
-                      </div>
-                      <AnimatePresence initial={firstMount.current}>
-                        {outItems.map((item, idx) => (
-                          <PantryItemRow
-                            key={item.id}
-                            item={item}
-                            onUpdated={handleUpdated}
-                            onDeleted={handleDeleted}
-                            showHandle={false}
-                            entryDelay={entryDelay(inStockItems.length + idx)}
-                            isNew={item.id === newItemId}
-                          />
-                        ))}
-                      </AnimatePresence>
-                    </>
-                  )}
+                      </motion.div>
+                    )}
 
-                  {/* No search matches */}
-                  <AnimatePresence>
+                    {outItems.map((item, idx) => (
+                      <PantryItemRow
+                        key={item.id}
+                        item={item}
+                        onUpdated={handleUpdated}
+                        onDeleted={handleDeleted}
+                        showHandle={false}
+                        entryDelay={entryDelay(inStockItems.length + idx)}
+                        isNew={item.id === newItemId}
+                      />
+                    ))}
+
                     {filtered.length === 0 && searchQuery && (
                       <motion.div
+                        key="no-match"
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
