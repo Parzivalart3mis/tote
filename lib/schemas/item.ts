@@ -2,7 +2,10 @@ import { z } from 'zod';
 import { ITEM_CATEGORIES } from '@/lib/categories';
 
 const priceUnitEnum = z.enum(['lb', 'oz', 'piece']).optional().nullable();
-const categoryEnum = z.enum(ITEM_CATEGORIES as unknown as [string, ...string[]]).optional().nullable();
+const categoryEnum = z.preprocess(
+  (v) => (v === '' ? undefined : v),
+  z.enum(ITEM_CATEGORIES as unknown as [string, ...string[]]).optional().nullable()
+);
 
 export const createItemSchema = z
   .object({
