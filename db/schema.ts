@@ -70,8 +70,37 @@ export const items = sqliteTable(
   ]
 );
 
+export const pantryItems = sqliteTable(
+  'pantry_items',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    quantity: text('quantity'),
+    unit: text('unit'),
+    note: text('note'),
+    category: text('category'),
+    isOut: integer('is_out', { mode: 'boolean' }).notNull().default(false),
+    position: integer('position').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' })
+      .$defaultFn(() => new Date())
+      .notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .$defaultFn(() => new Date())
+      .$onUpdateFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [index('pantry_items_user_idx').on(t.userId)]
+);
+
 export type User = typeof users.$inferSelect;
 export type Store = typeof stores.$inferSelect;
 export type Item = typeof items.$inferSelect;
+export type PantryItem = typeof pantryItems.$inferSelect;
 export type NewStore = typeof stores.$inferInsert;
 export type NewItem = typeof items.$inferInsert;
+export type NewPantryItem = typeof pantryItems.$inferInsert;

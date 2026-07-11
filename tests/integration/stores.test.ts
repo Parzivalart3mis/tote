@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { drizzle } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
-import { users, stores, items } from '@/db/schema';
+import { users, stores, items, pantryItems } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '@/db/schema';
 
@@ -54,6 +54,22 @@ async function migrateTestDb(db: ReturnType<typeof createTestDb>) {
       checked INTEGER NOT NULL DEFAULT 0,
       favorite INTEGER NOT NULL DEFAULT 0,
       running_low INTEGER NOT NULL DEFAULT 0,
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    )`
+  );
+
+  await db.run(
+    `CREATE TABLE IF NOT EXISTS pantry_items (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      quantity TEXT,
+      unit TEXT,
+      note TEXT,
+      category TEXT,
+      is_out INTEGER NOT NULL DEFAULT 0,
       position INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL

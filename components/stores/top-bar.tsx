@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { Search } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
+import { Search, ShoppingCart, Package } from 'lucide-react';
 
 import { UserButton } from '@clerk/nextjs';
 import { useEffect } from 'react';
@@ -11,6 +11,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 
 export function TopBar() {
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -22,6 +23,9 @@ export function TopBar() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [router]);
+
+  const isPantry = pathname.startsWith('/pantry');
+  const isStores = !isPantry;
 
   return (
     <header
@@ -38,6 +42,35 @@ export function TopBar() {
             Tote
           </span>
         </Link>
+
+        {/* Nav tabs */}
+        <nav className="flex items-center gap-1 rounded-xl p-0.5" style={{ backgroundColor: 'var(--surface)' }}>
+          <Link
+            href="/stores"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-medium transition-colors"
+            style={
+              isStores
+                ? { backgroundColor: 'var(--accent)', color: 'white' }
+                : { color: 'var(--text-muted)' }
+            }
+          >
+            <ShoppingCart size={12} />
+            Stores
+          </Link>
+          <Link
+            href="/pantry"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-medium transition-colors"
+            style={
+              isPantry
+                ? { backgroundColor: 'var(--accent)', color: 'white' }
+                : { color: 'var(--text-muted)' }
+            }
+          >
+            <Package size={12} />
+            Pantry
+          </Link>
+        </nav>
+
         <div className="flex items-center gap-1">
           <ThemeToggle />
           <Link
