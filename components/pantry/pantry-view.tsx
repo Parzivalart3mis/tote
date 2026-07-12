@@ -381,7 +381,7 @@ export function PantryView({ initialItems }: PantryViewProps) {
                   {/* Single AnimatePresence for both sections: a toggled item keeps its
                       key and glides between sections via layout animation instead of
                       unmounting/remounting (which desyncs presence + duplicate sortable ids) */}
-                  <AnimatePresence initial={firstMount.current}>
+                  <AnimatePresence mode="popLayout">
                     {inStockItems.length > 0 && (
                       <motion.div
                         key="header-in"
@@ -412,6 +412,7 @@ export function PantryView({ initialItems }: PantryViewProps) {
                         showHandle={!searchQuery}
                         entryDelay={entryDelay(idx)}
                         isNew={item.id === newItemId}
+                        animateEntry={firstMount.current}
                       />
                     ))}
 
@@ -445,6 +446,7 @@ export function PantryView({ initialItems }: PantryViewProps) {
                         showHandle={false}
                         entryDelay={entryDelay(inStockItems.length + idx)}
                         isNew={item.id === newItemId}
+                        animateEntry={firstMount.current}
                       />
                     ))}
 

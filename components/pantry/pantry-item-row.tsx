@@ -16,9 +16,13 @@ interface PantryItemRowProps {
   showHandle: boolean;
   entryDelay?: number;
   isNew?: boolean;
+  /** Play the fade-up entrance. Only safe on first paint: entering AnimatePresence
+      with both `layout` and an initial animation while siblings layout-shift makes
+      framer-motion swallow the enter animation, leaving the row stuck invisible. */
+  animateEntry?: boolean;
 }
 
-export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDelay = 0, isNew }: PantryItemRowProps) {
+export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDelay = 0, isNew, animateEntry = false }: PantryItemRowProps) {
   const [loading, setLoading] = useState(false);
   // Increments on each toggle press so the pulse ring re-fires exactly once per interaction
   const [pulseKey, setPulseKey] = useState(0);
@@ -84,7 +88,7 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDel
       ref={setRefs}
       style={{ ...dragStyle, position: 'relative' }}
       layout
-      initial={{ opacity: 0, y: 14 }}
+      initial={animateEntry ? { opacity: 0, y: 14 } : false}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -24, transition: { duration: 0.18 } }}
       transition={{ type: 'spring', stiffness: 420, damping: 32, delay: entryDelay }}
