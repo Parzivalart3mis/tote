@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '@/db';
 import { pantryItems } from '@/db/schema';
+import { pantryStatusRank } from '@/lib/pantry-order';
 import { PantryView } from '@/components/pantry/pantry-view';
 
 export default async function PantryPage() {
@@ -15,7 +16,7 @@ export default async function PantryPage() {
     .select()
     .from(pantryItems)
     .where(eq(pantryItems.userId, userId))
-    .orderBy(asc(pantryItems.isOut), asc(pantryItems.position), asc(pantryItems.createdAt));
+    .orderBy(pantryStatusRank, asc(pantryItems.position), asc(pantryItems.createdAt));
 
   return <PantryView initialItems={items} />;
 }

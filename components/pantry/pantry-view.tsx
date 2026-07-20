@@ -3,8 +3,9 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import {
-  Package, PackageOpen, Search, X, SearchX,
+  Package, PackageMinus, PackageOpen, Search, X, SearchX,
 } from 'lucide-react';
+import { PANTRY_STATUS_RANK, type PantryStatus } from '@/lib/pantry-status';
 import { toast } from 'sonner';
 import {
   DndContext,
@@ -26,10 +27,18 @@ interface PantryViewProps {
 
 function sortItems(arr: PantryItem[]): PantryItem[] {
   return [...arr].sort((a, b) => {
-    if (a.isOut !== b.isOut) return a.isOut ? 1 : -1;
+    const rank = PANTRY_STATUS_RANK[a.status] - PANTRY_STATUS_RANK[b.status];
+    if (rank !== 0) return rank;
     return a.position - b.position || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
   });
 }
+
+/** Section chrome per status, in render order. */
+const SECTIONS: { status: PantryStatus; label: string; color: string; soft: string; Icon: typeof Package }[] = [
+  { status: 'IN_STOCK', label: 'In stock', color: 'var(--text-muted)', soft: 'var(--accent-soft)', Icon: Package },
+  { status: 'LOW', label: 'Running low', color: 'var(--warning)', soft: 'rgba(249,115,22,0.14)', Icon: PackageMinus },
+  { status: 'OUT', label: 'Out', color: 'var(--error)', soft: 'rgba(220,38,38,0.1)', Icon: PackageOpen },
+];
 
 /* Soft drifting color fields behind the content — transforms only, GPU-composited */
 function AmbientBackground() {
@@ -137,11 +146,11 @@ export function PantryView({ initialItems }: PantryViewProps) {
               const json = await res.json() as { item?: PantryItem };
               if (!res.ok || !json.item) throw new Error();
               let restored = json.item;
-              if (deleted.isOut) {
+              if (deleted.status !== 'IN_STOCK') {
                 const patchRes = await fetch(`/api/pantry/items/${restored.id}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ isOut: true }),
+                  body: JSON.stringify({ status: deleted.status }),
                 });
                 const patchJson = await patchRes.json() as { item?: PantryItem };
                 if (patchRes.ok && patchJson.item) restored = patchJson.item;
@@ -162,11 +171,25 @@ export function PantryView({ initialItems }: PantryViewProps) {
     return items.filter((i) => i.name.toLowerCase().includes(q));
   }, [items, searchQuery]);
 
-  const inStockItems = filtered.filter((i) => !i.isOut);
-  const outItems = filtered.filter((i) => i.isOut);
-  const inStockCount = items.filter((i) => !i.isOut).length;
-  const outCount = items.length - inStockCount;
-  const stockRatio = items.length > 0 ? inStockCount / items.length : 1;
+  // Non-empty sections in render order, each carrying its offset into the flat
+  // row list so entrance stagger stays continuous across section boundaries.
+  const visibleSections = useMemo(() => {
+    let seen = 0;
+    return SECTIONS.map((section) => {
+      const rows = filtered.filter((i) => i.status === section.status);
+      const start = seen;
+      seen += rows.length;
+      return { ...section, rows, start };
+    }).filter((s) => s.rows.length > 0);
+  }, [filtered]);
+
+  const countOf = (status: PantryStatus) => items.filter((i) => i.status === status).length;
+
+  const inStockCount = countOf('IN_STOCK');
+  const lowCount = countOf('LOW');
+  const outCount = countOf('OUT');
+  const total = items.length || 1;
+  const pct = (n: number) => (n / total) * 100;
 
   const toggleSearch = () => {
     setSearchOpen((v) => {
@@ -231,7 +254,7 @@ export function PantryView({ initialItems }: PantryViewProps) {
                 transition={{ delay: 0.08 }}
                 className="mt-2.5 space-y-2"
               >
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
                   <span
                     className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
                     style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
@@ -240,9 +263,25 @@ export function PantryView({ initialItems }: PantryViewProps) {
                     <AnimatedCount value={inStockCount} />
                     in stock
                   </span>
-                  <AnimatePresence>
+                  <AnimatePresence mode="popLayout">
+                    {lowCount > 0 && (
+                      <motion.span
+                        key="low-chip"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
+                        style={{ backgroundColor: 'rgba(249,115,22,0.14)', color: 'var(--warning)' }}
+                      >
+                        <PackageMinus size={10} />
+                        <AnimatedCount value={lowCount} />
+                        low
+                      </motion.span>
+                    )}
                     {outCount > 0 && (
                       <motion.span
+                        key="out-chip"
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.8 }}
@@ -257,22 +296,27 @@ export function PantryView({ initialItems }: PantryViewProps) {
                     )}
                   </AnimatePresence>
                 </div>
+                {/* Segmented health bar: green / amber / red in proportion */}
                 <div
-                  className="h-1 w-full overflow-hidden rounded-full"
+                  className="flex h-1 w-full overflow-hidden rounded-full"
                   style={{ backgroundColor: 'var(--border)' }}
-                  role="progressbar"
-                  aria-label="Pantry stock level"
-                  aria-valuenow={Math.round(stockRatio * 100)}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
+                  role="img"
+                  aria-label={`Pantry stock: ${inStockCount} in stock, ${lowCount} running low, ${outCount} out`}
                 >
-                  <motion.div
-                    className="h-full rounded-full"
-                    style={{ background: 'linear-gradient(90deg, var(--accent), #4ADE80)' }}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${stockRatio * 100}%` }}
-                    transition={{ type: 'spring', stiffness: 120, damping: 24, delay: 0.15 }}
-                  />
+                  {([
+                    { key: 'in', n: inStockCount, bg: 'linear-gradient(90deg, var(--accent), #4ADE80)' },
+                    { key: 'low', n: lowCount, bg: 'var(--warning)' },
+                    { key: 'out', n: outCount, bg: 'var(--error)' },
+                  ] as const).map((seg) => (
+                    <motion.div
+                      key={seg.key}
+                      className="h-full"
+                      style={{ background: seg.bg }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct(seg.n)}%` }}
+                      transition={{ type: 'spring', stiffness: 120, damping: 24, delay: 0.15 }}
+                    />
+                  ))}
                 </div>
               </motion.div>
             )}
@@ -378,77 +422,45 @@ export function PantryView({ initialItems }: PantryViewProps) {
                   className="overflow-hidden rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.03),0_4px_16px_-4px_rgba(0,0,0,0.06)]"
                   style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
                 >
-                  {/* Single AnimatePresence for both sections: a toggled item keeps its
-                      key and glides between sections via layout animation instead of
-                      unmounting/remounting (which desyncs presence + duplicate sortable ids) */}
+                  {/* One AnimatePresence across all sections: an item whose status changes
+                      keeps its key and glides to its new section via layout animation instead
+                      of unmounting/remounting (which desyncs presence + duplicate sortable ids) */}
                   <AnimatePresence mode="popLayout">
-                    {inStockItems.length > 0 && (
+                    {visibleSections.flatMap((section) => [
                       <motion.div
-                        key="header-in"
+                        key={`header-${section.status}`}
                         layout
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="flex items-center gap-1.5 border-b px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.08em]"
-                        style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+                        style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: section.color }}
                       >
-                        <Package size={11} />
-                        In stock
+                        <section.Icon size={11} />
+                        {section.label}
                         <span
                           className="ml-auto rounded-full px-1.5 py-px tabular-nums"
-                          style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+                          style={{
+                            backgroundColor: section.soft,
+                            color: section.status === 'IN_STOCK' ? 'var(--accent)' : section.color,
+                          }}
                         >
-                          <AnimatedCount value={inStockItems.length} />
+                          <AnimatedCount value={section.rows.length} />
                         </span>
-                      </motion.div>
-                    )}
-
-                    {inStockItems.map((item, idx) => (
-                      <PantryItemRow
-                        key={item.id}
-                        item={item}
-                        onUpdated={handleUpdated}
-                        onDeleted={handleDeleted}
-                        showHandle={!searchQuery}
-                        entryDelay={entryDelay(idx)}
-                        isNew={item.id === newItemId}
-                        animateEntry={firstMount.current}
-                      />
-                    ))}
-
-                    {outItems.length > 0 && (
-                      <motion.div
-                        key="header-out"
-                        layout
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex items-center gap-1.5 border-b px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.08em]"
-                        style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--error)' }}
-                      >
-                        <PackageOpen size={11} />
-                        Out
-                        <span
-                          className="ml-auto rounded-full px-1.5 py-px tabular-nums"
-                          style={{ backgroundColor: 'rgba(220,38,38,0.1)', color: 'var(--error)' }}
-                        >
-                          <AnimatedCount value={outItems.length} />
-                        </span>
-                      </motion.div>
-                    )}
-
-                    {outItems.map((item, idx) => (
-                      <PantryItemRow
-                        key={item.id}
-                        item={item}
-                        onUpdated={handleUpdated}
-                        onDeleted={handleDeleted}
-                        showHandle={false}
-                        entryDelay={entryDelay(inStockItems.length + idx)}
-                        isNew={item.id === newItemId}
-                        animateEntry={firstMount.current}
-                      />
-                    ))}
+                      </motion.div>,
+                      ...section.rows.map((item, idx) => (
+                        <PantryItemRow
+                          key={item.id}
+                          item={item}
+                          onUpdated={handleUpdated}
+                          onDeleted={handleDeleted}
+                          showHandle={section.status !== 'OUT' && !searchQuery}
+                          entryDelay={entryDelay(section.start + idx)}
+                          isNew={item.id === newItemId}
+                          animateEntry={firstMount.current}
+                        />
+                      )),
+                    ])}
 
                     {filtered.length === 0 && searchQuery && (
                       <motion.div

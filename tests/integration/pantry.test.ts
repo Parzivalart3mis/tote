@@ -4,6 +4,12 @@ import { createClient } from '@libsql/client';
 import { users, pantryItems } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import * as schema from '@/db/schema';
+import {
+  NEXT_PANTRY_STATUS,
+  PANTRY_STATUS_RANK,
+  type PantryStatus,
+} from '@/lib/pantry-status';
+import { updatePantryItemSchema } from '@/lib/schemas/pantry';
 
 function createTestDb() {
   const client = createClient({ url: ':memory:' });
@@ -28,7 +34,7 @@ async function migrateTestDb(db: ReturnType<typeof createTestDb>) {
       unit TEXT,
       note TEXT,
       category TEXT,
-      is_out INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'IN_STOCK',
       position INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
@@ -52,30 +58,62 @@ describe('pantry isolation', () => {
     await db.delete(pantryItems).all();
   });
 
-  it('creates a pantry item with isOut defaulting to false', async () => {
+  it('creates a pantry item defaulting to IN_STOCK', async () => {
     const [item] = await db
       .insert(pantryItems)
       .values({ userId: userA, name: 'Olive Oil', position: 0 })
       .returning();
 
     expect(item?.name).toBe('Olive Oil');
-    expect(item?.isOut).toBe(false);
+    expect(item?.status).toBe('IN_STOCK');
     expect(item?.userId).toBe(userA);
   });
 
-  it('can toggle isOut to true', async () => {
+  it('advances through the full depletion cycle', async () => {
     const [item] = await db
       .insert(pantryItems)
       .values({ userId: userA, name: 'Salt', position: 0 })
       .returning();
 
-    const [updated] = await db
-      .update(pantryItems)
-      .set({ isOut: true })
-      .where(eq(pantryItems.id, item!.id))
-      .returning();
+    let current: PantryStatus = item!.status;
+    const seen: PantryStatus[] = [current];
 
-    expect(updated?.isOut).toBe(true);
+    for (let i = 0; i < 3; i++) {
+      current = NEXT_PANTRY_STATUS[current];
+      const [updated] = await db
+        .update(pantryItems)
+        .set({ status: current })
+        .where(eq(pantryItems.id, item!.id))
+        .returning();
+      expect(updated?.status).toBe(current);
+      seen.push(current);
+    }
+
+    // in stock → low → out → back to in stock
+    expect(seen).toEqual(['IN_STOCK', 'LOW', 'OUT', 'IN_STOCK']);
+  });
+
+  it('ranks statuses in stock → low → out for display order', async () => {
+    await db.insert(pantryItems).values([
+      { userId: userA, name: 'Gone', status: 'OUT', position: 0 },
+      { userId: userA, name: 'Plenty', status: 'IN_STOCK', position: 1 },
+      { userId: userA, name: 'Getting low', status: 'LOW', position: 2 },
+    ]);
+
+    const rows = await db.select().from(pantryItems).where(eq(pantryItems.userId, userA));
+    const ordered = [...rows].sort(
+      (a, b) => PANTRY_STATUS_RANK[a.status] - PANTRY_STATUS_RANK[b.status]
+    );
+
+    expect(ordered.map((r) => r.name)).toEqual(['Plenty', 'Getting low', 'Gone']);
+  });
+
+  it('rejects a status outside the allowed set', () => {
+    const ok = updatePantryItemSchema.safeParse({ status: 'LOW' });
+    expect(ok.success).toBe(true);
+
+    const bad = updatePantryItemSchema.safeParse({ status: 'ALMOST_GONE' });
+    expect(bad.success).toBe(false);
   });
 
   it('user A cannot see user B pantry items via scoped query', async () => {

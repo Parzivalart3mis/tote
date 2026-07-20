@@ -1,6 +1,7 @@
 import { asc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { pantryItems } from '@/db/schema';
+import { pantryStatusRank } from '@/lib/pantry-order';
 import { createPantryItemSchema } from '@/lib/schemas/pantry';
 import { checkRateLimit } from '@/lib/ratelimit';
 import { apiError, apiOk } from '@/lib/api-helpers';
@@ -15,7 +16,7 @@ export async function GET() {
     .select()
     .from(pantryItems)
     .where(eq(pantryItems.userId, userId))
-    .orderBy(asc(pantryItems.isOut), asc(pantryItems.position), asc(pantryItems.createdAt));
+    .orderBy(pantryStatusRank, asc(pantryItems.position), asc(pantryItems.createdAt));
 
   return apiOk({ items });
 }

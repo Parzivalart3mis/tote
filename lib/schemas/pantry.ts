@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ITEM_CATEGORIES } from '@/lib/categories';
+import { PANTRY_STATUSES } from '@/lib/pantry-status';
 
 const categoryEnum = z.enum(ITEM_CATEGORIES as unknown as [string, ...string[]]).optional().nullable();
 
@@ -20,7 +21,7 @@ export const updatePantryItemSchema = z
     unit: z.string().max(20).optional().nullable(),
     note: z.string().max(500).optional().nullable(),
     category: categoryEnum,
-    isOut: z.boolean().optional(),
+    status: z.enum(PANTRY_STATUSES).optional(),
     position: z.number().int().min(0).max(9999).optional(),
   })
   .strict();

@@ -1,5 +1,6 @@
 import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { createId } from '@paralleldrive/cuid2';
+import { PANTRY_STATUSES } from '@/lib/pantry-status';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
@@ -84,7 +85,7 @@ export const pantryItems = sqliteTable(
     unit: text('unit'),
     note: text('note'),
     category: text('category'),
-    isOut: integer('is_out', { mode: 'boolean' }).notNull().default(false),
+    status: text('status', { enum: PANTRY_STATUSES }).notNull().default('IN_STOCK'),
     position: integer('position').notNull().default(0),
     createdAt: integer('created_at', { mode: 'timestamp_ms' })
       .$defaultFn(() => new Date())

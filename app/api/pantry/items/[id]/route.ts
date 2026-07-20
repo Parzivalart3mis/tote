@@ -36,7 +36,7 @@ export async function PATCH(req: Request, { params }: Params) {
   if ('unit' in parsed.data) updates.unit = parsed.data.unit ?? null;
   if ('note' in parsed.data) updates.note = parsed.data.note ?? null;
   if ('category' in parsed.data) updates.category = parsed.data.category ?? null;
-  if (parsed.data.isOut !== undefined) updates.isOut = parsed.data.isOut;
+  if (parsed.data.status !== undefined) updates.status = parsed.data.status;
   if (parsed.data.position !== undefined) updates.position = parsed.data.position;
 
   const [updated] = await db

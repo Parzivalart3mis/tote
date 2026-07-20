@@ -2,12 +2,29 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Package, PackageOpen, Trash2, GripVertical } from 'lucide-react';
+import { Package, PackageMinus, PackageOpen, Trash2, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryItem } from '@/db/schema';
 import { EditPantryItemDialog } from './edit-pantry-item-dialog';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import {
+  NEXT_PANTRY_STATUS,
+  PANTRY_STATUS_LABEL,
+  type PantryStatus,
+} from '@/lib/pantry-status';
+
+/** Per-status visuals for the stock button, badge and text treatment. */
+const STATUS_STYLE: Record<PantryStatus, {
+  color: string;
+  soft: string;
+  Icon: typeof Package;
+  badge: string | null;
+}> = {
+  IN_STOCK: { color: 'var(--accent)', soft: 'var(--accent-soft)', Icon: Package, badge: null },
+  LOW: { color: 'var(--warning)', soft: 'rgba(249,115,22,0.14)', Icon: PackageMinus, badge: 'low' },
+  OUT: { color: 'var(--error)', soft: 'rgba(220,38,38,0.1)', Icon: PackageOpen, badge: 'out' },
+};
 
 interface PantryItemRowProps {
   item: PantryItem;
@@ -68,9 +85,10 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDel
     }
   };
 
-  const handleToggleOut = () => {
+  // One tap advances along the depletion cycle: in stock → low → out → in stock
+  const handleCycleStatus = () => {
     setPulseKey((k) => k + 1);
-    void patch({ isOut: !item.isOut });
+    void patch({ status: NEXT_PANTRY_STATUS[item.status] });
   };
 
   const handleDelete = async () => {
@@ -82,6 +100,11 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDel
       toast.error('Could not delete item');
     }
   };
+
+  const style = STATUS_STYLE[item.status];
+  const StatusIcon = style.Icon;
+  const nextStatus = NEXT_PANTRY_STATUS[item.status];
+  const isOut = item.status === 'OUT';
 
   return (
     <motion.div
@@ -118,24 +141,22 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDel
         </button>
       )}
 
-      {/* Stock toggle — icon morph + pulse ring */}
+      {/* Stock cycle button — icon morph + pulse ring */}
       <motion.button
-        onClick={handleToggleOut}
+        onClick={handleCycleStatus}
         disabled={loading}
         whileTap={{ scale: 0.82 }}
-        aria-label={item.isOut ? 'Mark as in stock' : 'Mark as out'}
-        title={item.isOut ? 'Mark as in stock' : 'Mark as out'}
+        aria-label={`${PANTRY_STATUS_LABEL[item.status]}. Tap to mark ${PANTRY_STATUS_LABEL[nextStatus].toLowerCase()}`}
+        title={`Tap to mark ${PANTRY_STATUS_LABEL[nextStatus].toLowerCase()}`}
         className="relative flex size-8 shrink-0 items-center justify-center rounded-full transition-opacity disabled:opacity-40"
-        style={{
-          backgroundColor: item.isOut ? 'rgba(220,38,38,0.1)' : 'var(--accent-soft)',
-        }}
+        style={{ backgroundColor: style.soft }}
       >
         {pulseKey > 0 && (
           <motion.span
             key={pulseKey}
             aria-hidden
             className="absolute inset-0 rounded-full border-2"
-            style={{ borderColor: item.isOut ? 'var(--error)' : 'var(--accent)' }}
+            style={{ borderColor: style.color }}
             initial={{ scale: 1, opacity: 0.7 }}
             animate={{ scale: 1.7, opacity: 0 }}
             transition={{ duration: 0.5, ease: 'easeOut' }}
@@ -143,18 +164,14 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDel
         )}
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.span
-            key={item.isOut ? 'out' : 'in'}
+            key={item.status}
             initial={{ scale: 0.4, rotate: -50, opacity: 0 }}
             animate={{ scale: 1, rotate: 0, opacity: 1 }}
             exit={{ scale: 0.4, rotate: 50, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 600, damping: 30 }}
             className="flex"
           >
-            {item.isOut ? (
-              <PackageOpen size={16} style={{ color: 'var(--error)' }} />
-            ) : (
-              <Package size={16} style={{ color: 'var(--accent)' }} />
-            )}
+            <StatusIcon size={16} style={{ color: style.color }} />
           </motion.span>
         </AnimatePresence>
       </motion.button>
@@ -164,16 +181,16 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDel
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
           <span
             className="relative text-sm font-medium transition-colors duration-300"
-            style={{ color: item.isOut ? 'var(--text-muted)' : 'var(--text)' }}
+            style={{ color: isOut ? 'var(--text-muted)' : 'var(--text)' }}
           >
             {item.name}
-            {/* Strike-through draws itself across on toggle */}
+            {/* Strike-through draws itself across when the item runs out */}
             <motion.span
               aria-hidden
               className="absolute left-0 top-1/2 h-[1.5px] -translate-y-1/2 rounded-full"
               style={{ backgroundColor: 'var(--text-muted)' }}
               initial={false}
-              animate={{ width: item.isOut ? '100%' : '0%' }}
+              animate={{ width: isOut ? '100%' : '0%' }}
               transition={{ duration: 0.28, ease: 'easeOut' }}
             />
           </span>
@@ -191,17 +208,18 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDel
               {item.category}
             </span>
           )}
-          <AnimatePresence>
-            {item.isOut && (
+          <AnimatePresence mode="popLayout" initial={false}>
+            {style.badge && (
               <motion.span
+                key={item.status}
                 initial={{ opacity: 0, scale: 0.7 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.7 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 28 }}
                 className="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                style={{ backgroundColor: 'rgba(220,38,38,0.12)', color: 'var(--error)' }}
+                style={{ backgroundColor: style.soft, color: style.color }}
               >
-                out
+                {style.badge}
               </motion.span>
             )}
           </AnimatePresence>
