@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, type MotionStyle } from 'framer-motion';
 import { Package, PackageMinus, PackageOpen, Trash2, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryItem } from '@/db/schema';
@@ -37,9 +37,19 @@ interface PantryItemRowProps {
       with both `layout` and an initial animation while siblings layout-shift makes
       framer-motion swallow the enter animation, leaving the row stuck invisible. */
   animateEntry?: boolean;
+  /** Opt out of layout projection entirely (used by the flat search list, which
+      renders results structurally rather than animating them in and out). */
+  disableLayout?: boolean;
+  /** Styles injected by a parent (notably AnimatePresence mode="popLayout", which
+      must be able to set position/top/left on an exiting row). Merged last so the
+      framework can always override our own positioning. */
+  style?: React.CSSProperties;
 }
 
-export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDelay = 0, isNew, animateEntry = false }: PantryItemRowProps) {
+export function PantryItemRow({
+  item, onUpdated, onDeleted, showHandle, entryDelay = 0, isNew,
+  animateEntry = false, disableLayout = false, style: injectedStyle,
+}: PantryItemRowProps) {
   const [loading, setLoading] = useState(false);
   // Increments on each toggle press so the pulse ring re-fires exactly once per interaction
   const [pulseKey, setPulseKey] = useState(0);
@@ -109,8 +119,8 @@ export function PantryItemRow({ item, onUpdated, onDeleted, showHandle, entryDel
   return (
     <motion.div
       ref={setRefs}
-      style={{ ...dragStyle, position: 'relative' }}
-      layout
+      style={{ position: 'relative', ...dragStyle, ...injectedStyle } as MotionStyle}
+      layout={!disableLayout}
       initial={animateEntry ? { opacity: 0, y: 14 } : false}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, x: -24, transition: { duration: 0.18 } }}

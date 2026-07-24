@@ -4,8 +4,8 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import {
   Package, PackageMinus, PackageOpen, Search, X, SearchX,
+  ChevronDown, ArrowUpAZ, ArrowDownAZ, GripVertical,
 } from 'lucide-react';
-import { PANTRY_STATUS_RANK, type PantryStatus } from '@/lib/pantry-status';
 import { toast } from 'sonner';
 import {
   DndContext,
@@ -18,19 +18,17 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import type { PantryItem } from '@/db/schema';
+import { type PantryStatus } from '@/lib/pantry-status';
+import {
+  PANTRY_SORT_MODES, PANTRY_SORT_KEY, PANTRY_COLLAPSE_KEY,
+  type PantrySortMode, nextSortMode, sortModeLabel,
+  sortPantryItems, filterPantryItems,
+} from '@/lib/pantry-sort';
 import { AddPantryItemDialog } from './add-pantry-item-dialog';
 import { PantryItemRow } from './pantry-item-row';
 
 interface PantryViewProps {
   initialItems: PantryItem[];
-}
-
-function sortItems(arr: PantryItem[]): PantryItem[] {
-  return [...arr].sort((a, b) => {
-    const rank = PANTRY_STATUS_RANK[a.status] - PANTRY_STATUS_RANK[b.status];
-    if (rank !== 0) return rank;
-    return a.position - b.position || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-  });
 }
 
 /** Section chrome per status, in render order. */
@@ -39,6 +37,23 @@ const SECTIONS: { status: PantryStatus; label: string; color: string; soft: stri
   { status: 'LOW', label: 'Running low', color: 'var(--warning)', soft: 'rgba(249,115,22,0.14)', Icon: PackageMinus },
   { status: 'OUT', label: 'Out', color: 'var(--error)', soft: 'rgba(220,38,38,0.1)', Icon: PackageOpen },
 ];
+
+function readSortMode(): PantrySortMode {
+  if (typeof window === 'undefined') return 'manual';
+  const saved = localStorage.getItem(PANTRY_SORT_KEY) as PantrySortMode | null;
+  return saved && PANTRY_SORT_MODES.includes(saved) ? saved : 'manual';
+}
+
+function readCollapsed(): PantryStatus[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(PANTRY_COLLAPSE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(parsed) ? (parsed.filter((s) => typeof s === 'string') as PantryStatus[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 /* Soft drifting color fields behind the content — transforms only, GPU-composited */
 function AmbientBackground() {
@@ -60,7 +75,7 @@ function AmbientBackground() {
   );
 }
 
-/* Number that slides vertically when its value changes */
+/** Number that slides vertically when its value changes */
 function AnimatedCount({ value }: { value: number }) {
   return (
     <span className="relative inline-flex h-[1.1em] items-center overflow-hidden">
@@ -81,10 +96,12 @@ function AnimatedCount({ value }: { value: number }) {
 }
 
 export function PantryView({ initialItems }: PantryViewProps) {
-  const [items, setItems] = useState<PantryItem[]>(() => sortItems(initialItems));
+  const [sortMode, setSortMode] = useState<PantrySortMode>(readSortMode);
+  const [items, setItems] = useState<PantryItem[]>(() => sortPantryItems(initialItems, readSortMode()));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [newItemId, setNewItemId] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<PantryStatus[]>(readCollapsed);
 
   // Stagger row entrances only on the very first paint
   const firstMount = useRef(true);
@@ -101,7 +118,8 @@ export function PantryView({ initialItems }: PantryViewProps) {
     setItems((prev) => {
       const oldIdx = prev.findIndex((i) => i.id === active.id);
       const newIdx = prev.findIndex((i) => i.id === over.id);
-      const reordered = sortItems(arrayMove(prev, oldIdx, newIdx));
+      const reordered = sortPantryItems(arrayMove(prev, oldIdx, newIdx), 'manual')
+        .map((item, position) => ({ ...item, position }));
       void fetch('/api/pantry/items/reorder', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -112,16 +130,16 @@ export function PantryView({ initialItems }: PantryViewProps) {
   }, []);
 
   const handleAdded = (item: PantryItem) => {
-    setItems((prev) => sortItems([...prev, item]));
+    setItems((prev) => sortPantryItems([...prev, item], sortMode));
     setNewItemId(item.id);
     setTimeout(() => setNewItemId(null), 1600);
   };
 
   const handleUpdated = (updated: PantryItem) => {
-    setItems((prev) => sortItems(prev.map((i) => (i.id === updated.id ? updated : i))));
+    setItems((prev) => sortPantryItems(prev.map((i) => (i.id === updated.id ? updated : i)), sortMode));
   };
 
-  // Delete with undo — restores the item (and its out status) if tapped in time
+  // Delete with undo — restores the item (and its status) if tapped in time
   const handleDeleted = (id: string) => {
     const deleted = items.find((i) => i.id === id);
     setItems((prev) => prev.filter((i) => i.id !== id));
@@ -155,7 +173,7 @@ export function PantryView({ initialItems }: PantryViewProps) {
                 const patchJson = await patchRes.json() as { item?: PantryItem };
                 if (patchRes.ok && patchJson.item) restored = patchJson.item;
               }
-              setItems((prev) => sortItems([...prev, restored]));
+              setItems((prev) => sortPantryItems([...prev, restored], sortMode));
             } catch {
               toast.error('Could not restore item');
             }
@@ -165,31 +183,61 @@ export function PantryView({ initialItems }: PantryViewProps) {
     });
   };
 
-  const filtered = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((i) => i.name.toLowerCase().includes(q));
-  }, [items, searchQuery]);
+  const cycleSortMode = () => {
+    setSortMode((prev) => {
+      const next = nextSortMode(prev);
+      localStorage.setItem(PANTRY_SORT_KEY, next);
+      setItems((cur) => sortPantryItems(cur, next));
+      return next;
+    });
+  };
+
+  const toggleCollapsed = (status: PantryStatus) => {
+    setCollapsed((prev) => {
+      const next = prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status];
+      localStorage.setItem(PANTRY_COLLAPSE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const query = searchQuery.trim();
+  const isSearching = query.length > 0;
+
+  // Search results are computed independently of the grouped view and rendered
+  // through a separate, animation-free branch — a non-matching row is absent
+  // from the DOM rather than animated away, so it cannot linger.
+  const searchResults = useMemo(
+    () => (isSearching ? sortPantryItems(filterPantryItems(items, query), sortMode) : []),
+    [items, query, isSearching, sortMode]
+  );
 
   // Non-empty sections in render order, each carrying its offset into the flat
   // row list so entrance stagger stays continuous across section boundaries.
   const visibleSections = useMemo(() => {
     let seen = 0;
     return SECTIONS.map((section) => {
-      const rows = filtered.filter((i) => i.status === section.status);
+      const rows = items.filter((i) => i.status === section.status);
       const start = seen;
       seen += rows.length;
       return { ...section, rows, start };
     }).filter((s) => s.rows.length > 0);
-  }, [filtered]);
+  }, [items]);
 
   const countOf = (status: PantryStatus) => items.filter((i) => i.status === status).length;
-
   const inStockCount = countOf('IN_STOCK');
   const lowCount = countOf('LOW');
   const outCount = countOf('OUT');
   const total = items.length || 1;
   const pct = (n: number) => (n / total) * 100;
+
+  // Only rows actually on screen are registered with dnd-kit, so its index
+  // bookkeeping can never drift from what is rendered.
+  const renderedIds = useMemo(
+    () => (isSearching
+      ? searchResults.map((i) => i.id)
+      : visibleSections.filter((s) => !collapsed.includes(s.status)).flatMap((s) => s.rows.map((i) => i.id))),
+    [isSearching, searchResults, visibleSections, collapsed]
+  );
 
   const toggleSearch = () => {
     setSearchOpen((v) => {
@@ -198,8 +246,12 @@ export function PantryView({ initialItems }: PantryViewProps) {
     });
   };
 
-  const entryDelay = (index: number) =>
-    firstMount.current ? Math.min(index, 8) * 0.045 : 0;
+  const entryDelay = (index: number) => (firstMount.current ? Math.min(index, 8) * 0.045 : 0);
+  const dragEnabled = !isSearching && sortMode === 'manual';
+
+  const listShell = 'overflow-hidden rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.03),0_4px_16px_-4px_rgba(0,0,0,0.06)]';
+  const listShellStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--surface)' };
+  const headerClass = 'flex items-center gap-1.5 border-b px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.08em]';
 
   return (
     <MotionConfig reducedMotion="user">
@@ -219,6 +271,20 @@ export function PantryView({ initialItems }: PantryViewProps) {
                 My pantry
               </h1>
               <div className="flex items-center gap-1.5">
+                {items.length > 1 && (
+                  <motion.button
+                    onClick={cycleSortMode}
+                    whileTap={{ scale: 0.92 }}
+                    aria-label={`Sort: ${sortModeLabel(sortMode)}. Tap to change`}
+                    className="flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-semibold transition-colors"
+                    style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+                  >
+                    {sortMode === 'manual' && <GripVertical size={11} />}
+                    {sortMode === 'name-asc' && <ArrowUpAZ size={11} />}
+                    {sortMode === 'name-desc' && <ArrowDownAZ size={11} />}
+                    {sortModeLabel(sortMode)}
+                  </motion.button>
+                )}
                 <motion.button
                   onClick={toggleSearch}
                   whileTap={{ scale: 0.88 }}
@@ -343,6 +409,7 @@ export function PantryView({ initialItems }: PantryViewProps) {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search pantry…"
+                    aria-label="Search pantry items by name"
                     className="w-full rounded-xl border py-2 pl-9 pr-9 text-sm outline-none transition-shadow focus:shadow-[0_0_0_3px_var(--accent-soft)]"
                     style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)', color: 'var(--text)' }}
                   />
@@ -414,75 +481,107 @@ export function PantryView({ initialItems }: PantryViewProps) {
             </motion.div>
           ) : (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ type: 'spring', stiffness: 320, damping: 30, delay: 0.05 }}
-                  className="overflow-hidden rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.03),0_4px_16px_-4px_rgba(0,0,0,0.06)]"
-                  style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
-                >
-                  {/* One AnimatePresence across all sections: an item whose status changes
-                      keeps its key and glides to its new section via layout animation instead
-                      of unmounting/remounting (which desyncs presence + duplicate sortable ids) */}
-                  <AnimatePresence mode="popLayout">
-                    {visibleSections.flatMap((section) => [
-                      <motion.div
-                        key={`header-${section.status}`}
-                        layout
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="flex items-center gap-1.5 border-b px-3.5 py-2 text-[10px] font-bold uppercase tracking-[0.08em]"
-                        style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: section.color }}
-                      >
-                        <section.Icon size={11} />
-                        {section.label}
-                        <span
-                          className="ml-auto rounded-full px-1.5 py-px tabular-nums"
-                          style={{
-                            backgroundColor: section.soft,
-                            color: section.status === 'IN_STOCK' ? 'var(--accent)' : section.color,
-                          }}
-                        >
-                          <AnimatedCount value={section.rows.length} />
-                        </span>
-                      </motion.div>,
-                      ...section.rows.map((item, idx) => (
-                        <PantryItemRow
-                          key={item.id}
-                          item={item}
-                          onUpdated={handleUpdated}
-                          onDeleted={handleDeleted}
-                          showHandle={section.status !== 'OUT' && !searchQuery}
-                          entryDelay={entryDelay(section.start + idx)}
-                          isNew={item.id === newItemId}
-                          animateEntry={firstMount.current}
-                        />
-                      )),
-                    ])}
+              <SortableContext items={renderedIds} strategy={verticalListSortingStrategy}>
+                {isSearching ? (
+                  /* ── Search results: plain structural list, no presence/layout
+                        animation, so only matching rows can ever be in the DOM ── */
+                  <div className={listShell} style={listShellStyle}>
+                    <div
+                      className={headerClass}
+                      style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+                    >
+                      <Search size={11} />
+                      {searchResults.length > 0
+                        ? `${searchResults.length} match${searchResults.length === 1 ? '' : 'es'}`
+                        : 'No matches'}
+                    </div>
 
-                    {filtered.length === 0 && searchQuery && (
-                      <motion.div
-                        key="no-match"
-                        initial={{ opacity: 0, y: 6 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        className="flex flex-col items-center gap-2 px-3 py-10 text-center"
-                      >
-                        <motion.div
-                          animate={{ rotate: [0, -8, 8, 0] }}
-                          transition={{ duration: 0.5, delay: 0.15 }}
-                        >
-                          <SearchX size={24} style={{ color: 'var(--text-hint)' }} />
-                        </motion.div>
+                    {searchResults.map((item) => (
+                      <PantryItemRow
+                        key={item.id}
+                        item={item}
+                        onUpdated={handleUpdated}
+                        onDeleted={handleDeleted}
+                        showHandle={false}
+                        disableLayout
+                      />
+                    ))}
+
+                    {searchResults.length === 0 && (
+                      <div className="flex flex-col items-center gap-2 px-3 py-10 text-center">
+                        <SearchX size={24} style={{ color: 'var(--text-hint)' }} />
                         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                          No items match &ldquo;{searchQuery}&rdquo;
+                          Nothing in your pantry matches &ldquo;{query}&rdquo;
                         </p>
-                      </motion.div>
+                      </div>
                     )}
-                  </AnimatePresence>
-                </motion.div>
+                  </div>
+                ) : (
+                  /* ── Grouped view ── */
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ type: 'spring', stiffness: 320, damping: 30, delay: 0.05 }}
+                    className={listShell}
+                    style={listShellStyle}
+                  >
+                    {/* One AnimatePresence across all sections: an item whose status changes
+                        keeps its key and glides to its new section via layout animation instead
+                        of unmounting/remounting (which desyncs presence + duplicate sortable ids) */}
+                    <AnimatePresence mode="popLayout">
+                      {visibleSections.flatMap((section) => {
+                        const isCollapsed = collapsed.includes(section.status);
+                        return [
+                          <motion.button
+                            key={`header-${section.status}`}
+                            layout
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => toggleCollapsed(section.status)}
+                            aria-expanded={!isCollapsed}
+                            aria-label={`${section.label}, ${section.rows.length} items. ${isCollapsed ? 'Expand' : 'Collapse'}`}
+                            className={`${headerClass} w-full transition-colors hover:brightness-95`}
+                            style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: section.color }}
+                          >
+                            <motion.span
+                              animate={{ rotate: isCollapsed ? -90 : 0 }}
+                              transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+                              className="flex"
+                            >
+                              <ChevronDown size={11} />
+                            </motion.span>
+                            <section.Icon size={11} />
+                            {section.label}
+                            <span
+                              className="ml-auto rounded-full px-1.5 py-px tabular-nums"
+                              style={{
+                                backgroundColor: section.soft,
+                                color: section.status === 'IN_STOCK' ? 'var(--accent)' : section.color,
+                              }}
+                            >
+                              <AnimatedCount value={section.rows.length} />
+                            </span>
+                          </motion.button>,
+                          ...(isCollapsed
+                            ? []
+                            : section.rows.map((item, idx) => (
+                                <PantryItemRow
+                                  key={item.id}
+                                  item={item}
+                                  onUpdated={handleUpdated}
+                                  onDeleted={handleDeleted}
+                                  showHandle={dragEnabled && section.status !== 'OUT'}
+                                  entryDelay={entryDelay(section.start + idx)}
+                                  isNew={item.id === newItemId}
+                                  animateEntry={firstMount.current}
+                                />
+                              ))),
+                        ];
+                      })}
+                    </AnimatePresence>
+                  </motion.div>
+                )}
               </SortableContext>
             </DndContext>
           )}
