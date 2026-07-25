@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowLeft, Check, Trash2, ShoppingCart, X,
-  Sparkles, Loader2, ArrowUpAZ, ArrowDownAZ, GripVertical, Search,
+  Sparkles, Loader2, ArrowUpAZ, ArrowDownAZ, GripVertical, Search, Package,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -21,6 +21,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import type { Store, Item } from '@/db/schema';
+import { findRestockCandidate, type RestockCandidate } from '@/lib/pantry-to-store';
 import { InitialsTile } from '@/components/initials-tile';
 import { SortableItemRow } from '@/components/items/sortable-item-row';
 import { AddItemDialog } from '@/components/items/add-item-dialog';
@@ -53,11 +54,17 @@ function sortItems(arr: Item[], mode: ItemSortMode): Item[] {
 interface StoreDetailViewProps {
   store: Store;
   initialItems: Item[];
+  restockCandidates?: RestockCandidate[];
 }
 
-export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
+export function StoreDetailView({ store, initialItems, restockCandidates = [] }: StoreDetailViewProps) {
   const router = useRouter();
   const [storeData, setStoreData] = useState(store);
+
+  // Low/Out pantry items eligible for a restock offer when their store item is
+  // checked off. Kept in a ref so it can be read from the update handler and
+  // pruned without forcing re-renders; each item is offered at most once.
+  const restockRef = useRef<RestockCandidate[]>(restockCandidates);
 
   // Sort mode — persisted to localStorage
   const [sortMode, setSortMode] = useState<ItemSortMode>(() => {
@@ -159,7 +166,45 @@ export function StoreDetailView({ store, initialItems }: StoreDetailViewProps) {
     : null;
   const showImage = proxyUrl && !imgError;
 
+  // Offer to restock the matching pantry item — only ever on an explicit tap,
+  // never automatically.
+  const offerRestock = (candidate: RestockCandidate) => {
+    toast(`${candidate.name} bought`, {
+      description: 'Mark it back in stock in your pantry?',
+      icon: <Package size={16} style={{ color: 'var(--accent)' }} />,
+      action: {
+        label: 'Restock',
+        onClick: () => {
+          void (async () => {
+            try {
+              const res = await fetch(`/api/pantry/items/${candidate.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'IN_STOCK' }),
+              });
+              if (!res.ok) throw new Error();
+              toast.success(`${candidate.name} restocked`);
+            } catch {
+              toast.error('Could not update pantry');
+            }
+          })();
+        },
+      },
+    });
+  };
+
   const handleItemUpdated = (updated: Item) => {
+    // Detect a genuine unchecked → checked transition (ignore all other edits),
+    // then offer to restock a matching Low/Out pantry item. Computed outside the
+    // state updater so the toast side effect fires exactly once.
+    const prevItem = items.find((i) => i.id === updated.id);
+    if (prevItem && !prevItem.checked && updated.checked) {
+      const candidate = findRestockCandidate(updated.name, restockRef.current);
+      if (candidate) {
+        restockRef.current = restockRef.current.filter((c) => c.id !== candidate.id);
+        offerRestock(candidate);
+      }
+    }
     setItems((prev) => sortItems(prev.map((i) => (i.id === updated.id ? updated : i)), sortMode));
   };
 

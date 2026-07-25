@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeName, planPantryToStore } from '@/lib/pantry-to-store';
+import { normalizeName, planPantryToStore, findRestockCandidate } from '@/lib/pantry-to-store';
 import type { PantryItem, Item } from '@/db/schema';
 
 type Src = Pick<PantryItem, 'name' | 'quantity' | 'unit' | 'category'>;
@@ -83,5 +83,44 @@ describe('planPantryToStore', () => {
   it('returns empty plan for empty input', () => {
     const plan = planPantryToStore([], [store('s1', 'Onion')]);
     expect(plan).toEqual({ entries: [], added: 0, reused: 0 });
+  });
+});
+
+describe('findRestockCandidate (store → pantry)', () => {
+  const cand = (id: string, name: string, status: string) => ({ id, name, status });
+
+  it('matches an OUT pantry item by name', () => {
+    const got = findRestockCandidate('Onion', [cand('p1', 'Onion', 'OUT')]);
+    expect(got?.id).toBe('p1');
+  });
+
+  it('matches a LOW pantry item by name', () => {
+    const got = findRestockCandidate('Sugar', [cand('p1', 'Sugar', 'LOW')]);
+    expect(got?.id).toBe('p1');
+  });
+
+  it('does NOT match an in-stock pantry item', () => {
+    expect(findRestockCandidate('Rice', [cand('p1', 'Rice', 'IN_STOCK')])).toBeNull();
+  });
+
+  it('matches case- and spacing-insensitively', () => {
+    const got = findRestockCandidate('  toor   DAL ', [cand('p1', 'Toor Dal', 'OUT')]);
+    expect(got?.id).toBe('p1');
+  });
+
+  it('returns null when no pantry item shares the name', () => {
+    expect(findRestockCandidate('Milk', [cand('p1', 'Onion', 'OUT')])).toBeNull();
+  });
+
+  it('returns null for an empty candidate list', () => {
+    expect(findRestockCandidate('Onion', [])).toBeNull();
+  });
+
+  it('picks the low/out match even if an in-stock item shares the name', () => {
+    const got = findRestockCandidate('Rice', [
+      cand('p1', 'Rice', 'IN_STOCK'),
+      cand('p2', 'rice', 'OUT'),
+    ]);
+    expect(got?.id).toBe('p2');
   });
 });

@@ -50,3 +50,28 @@ export function planPantryToStore(
 
   return { entries, added, reused };
 }
+
+/** A pantry item eligible to be restocked when its store counterpart is bought. */
+export interface RestockCandidate {
+  id: string;
+  name: string;
+  status: string;
+}
+
+/**
+ * Given the name of a just-purchased store item, find the pantry item that
+ * should be offered a restock: same normalized name, and currently Low or Out
+ * (an in-stock item needs no restock). Returns null when nothing qualifies.
+ * Pure so the store→pantry matching can be unit tested without a database.
+ */
+export function findRestockCandidate<T extends RestockCandidate>(
+  purchasedName: string,
+  candidates: T[]
+): T | null {
+  const key = normalizeName(purchasedName);
+  return (
+    candidates.find(
+      (c) => c.status !== 'IN_STOCK' && normalizeName(c.name) === key
+    ) ?? null
+  );
+}
