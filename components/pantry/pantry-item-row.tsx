@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion, type MotionStyle } from 'framer-motion';
-import { Package, PackageMinus, PackageOpen, Trash2, GripVertical } from 'lucide-react';
+import { Package, PackageMinus, PackageOpen, Trash2, GripVertical, ShoppingCart } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryItem } from '@/db/schema';
 import { EditPantryItemDialog } from './edit-pantry-item-dialog';
@@ -44,11 +44,14 @@ interface PantryItemRowProps {
       must be able to set position/top/left on an exiting row). Merged last so the
       framework can always override our own positioning. */
   style?: React.CSSProperties;
+  /** Invoked when the row's "add to shopping list" action is tapped. When absent,
+      the action is not shown (e.g. in-stock rows or when the user has no stores). */
+  onAddToList?: ((item: PantryItem) => void) | undefined;
 }
 
 export function PantryItemRow({
   item, onUpdated, onDeleted, showHandle, entryDelay = 0, isNew,
-  animateEntry = false, disableLayout = false, style: injectedStyle,
+  animateEntry = false, disableLayout = false, style: injectedStyle, onAddToList,
 }: PantryItemRowProps) {
   const [loading, setLoading] = useState(false);
   // Increments on each toggle press so the pulse ring re-fires exactly once per interaction
@@ -241,6 +244,17 @@ export function PantryItemRow({
 
       {/* Actions */}
       <div className="relative flex shrink-0 items-center gap-0.5">
+        {onAddToList && (
+          <motion.button
+            onClick={() => onAddToList(item)}
+            aria-label={`Add ${item.name} to a shopping list`}
+            title="Add to shopping list"
+            whileTap={{ scale: 0.85 }}
+            className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+          >
+            <ShoppingCart size={13} style={{ color: 'var(--accent)' }} />
+          </motion.button>
+        )}
         <EditPantryItemDialog
           key={new Date(item.updatedAt).getTime()}
           item={item}

@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import {
   Package, PackageMinus, PackageOpen, Search, X, SearchX,
-  ChevronDown, ArrowUpAZ, ArrowDownAZ, GripVertical,
+  ChevronDown, ArrowUpAZ, ArrowDownAZ, GripVertical, ShoppingCart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -26,9 +26,11 @@ import {
 } from '@/lib/pantry-sort';
 import { AddPantryItemDialog } from './add-pantry-item-dialog';
 import { PantryItemRow } from './pantry-item-row';
+import { StorePickerSheet, writeLastStore, type PickerStore } from './store-picker-sheet';
 
 interface PantryViewProps {
   initialItems: PantryItem[];
+  stores: PickerStore[];
 }
 
 /** Section chrome per status, in render order. */
@@ -95,13 +97,19 @@ function AnimatedCount({ value }: { value: number }) {
   );
 }
 
-export function PantryView({ initialItems }: PantryViewProps) {
+export function PantryView({ initialItems, stores }: PantryViewProps) {
   const [sortMode, setSortMode] = useState<PantrySortMode>(readSortMode);
   const [items, setItems] = useState<PantryItem[]>(() => sortPantryItems(initialItems, readSortMode()));
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [newItemId, setNewItemId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<PantryStatus[]>(readCollapsed);
+
+  // Store picker: pantry → shopping list. `pickerFor` holds the pantry items the
+  // next store pick will add — one item for a row action, many for the bulk action.
+  const [pickerFor, setPickerFor] = useState<PantryItem[] | null>(null);
+  const [busyStoreId, setBusyStoreId] = useState<string | null>(null);
+  const hasStores = stores.length > 0;
 
   // Stagger row entrances only on the very first paint
   const firstMount = useRef(true);
@@ -181,6 +189,39 @@ export function PantryView({ initialItems }: PantryViewProps) {
         },
       },
     });
+  };
+
+  // Open the store picker for one row, or for all low+out items (bulk).
+  const openPickerForItem = (item: PantryItem) => setPickerFor([item]);
+  const lowAndOut = items.filter((i) => i.status !== 'IN_STOCK');
+  const openPickerForLowAndOut = () => {
+    if (lowAndOut.length > 0) setPickerFor(lowAndOut);
+  };
+
+  const handlePickStore = async (store: PickerStore) => {
+    const targets = pickerFor;
+    if (!targets || targets.length === 0) return;
+    setBusyStoreId(store.id);
+    try {
+      const res = await fetch(`/api/stores/${store.id}/items/from-pantry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pantryItemIds: targets.map((i) => i.id) }),
+      });
+      const json = await res.json() as { added?: number; reused?: number };
+      if (!res.ok) throw new Error();
+      writeLastStore(store.id);
+      setPickerFor(null);
+      const total = (json.added ?? 0) + (json.reused ?? 0);
+      toast.success(
+        `${total} item${total === 1 ? '' : 's'} added to ${store.name}`,
+        { description: json.reused ? `${json.reused} already on the list ${json.reused === 1 ? 'was' : 'were'} re-flagged` : undefined }
+      );
+    } catch {
+      toast.error('Could not add to shopping list');
+    } finally {
+      setBusyStoreId(null);
+    }
   };
 
   const cycleSortMode = () => {
@@ -384,6 +425,24 @@ export function PantryView({ initialItems }: PantryViewProps) {
                     />
                   ))}
                 </div>
+
+                {/* Bulk: send everything low or out to a store's shopping list */}
+                <AnimatePresence>
+                  {hasStores && lowAndOut.length > 0 && (
+                    <motion.button
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      onClick={openPickerForLowAndOut}
+                      whileTap={{ scale: 0.99 }}
+                      className="flex w-full items-center justify-center gap-1.5 overflow-hidden rounded-xl py-2 text-xs font-semibold text-white"
+                      style={{ backgroundColor: 'var(--accent)' }}
+                    >
+                      <ShoppingCart size={13} />
+                      <span>{`Add ${lowAndOut.length} low & out to a trip`}</span>
+                    </motion.button>
+                  )}
+                </AnimatePresence>
               </motion.div>
             )}
           </motion.div>
@@ -504,6 +563,7 @@ export function PantryView({ initialItems }: PantryViewProps) {
                         onDeleted={handleDeleted}
                         showHandle={false}
                         disableLayout
+                        onAddToList={hasStores && item.status !== 'IN_STOCK' ? openPickerForItem : undefined}
                       />
                     ))}
 
@@ -575,6 +635,7 @@ export function PantryView({ initialItems }: PantryViewProps) {
                                   entryDelay={entryDelay(section.start + idx)}
                                   isNew={item.id === newItemId}
                                   animateEntry={firstMount.current}
+                                  onAddToList={hasStores && section.status !== 'IN_STOCK' ? openPickerForItem : undefined}
                                 />
                               ))),
                         ];
@@ -586,6 +647,15 @@ export function PantryView({ initialItems }: PantryViewProps) {
             </DndContext>
           )}
         </div>
+
+        <StorePickerSheet
+          open={pickerFor !== null}
+          onOpenChange={(v) => { if (!v) setPickerFor(null); }}
+          stores={stores}
+          count={pickerFor?.length ?? 0}
+          busyStoreId={busyStoreId}
+          onPick={handlePickStore}
+        />
       </div>
     </MotionConfig>
   );
