@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Search, X } from 'lucide-react';
+import { ArrowLeft, Search, X, SearchX } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { Store, Item } from '@/db/schema';
 
@@ -91,12 +91,26 @@ export function SearchView() {
           </div>
         )}
 
+        {!loading && !q.trim() && (
+          <div className="mt-16 flex flex-col items-center gap-2 px-6 text-center">
+            <Search size={26} style={{ color: 'var(--text-hint)' }} />
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              Search across all your stores and items
+            </p>
+          </div>
+        )}
+
         {!loading && q.trim() && results.length === 0 && (
-          <div className="mt-10 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-16 flex flex-col items-center gap-2 px-6 text-center"
+          >
+            <SearchX size={26} style={{ color: 'var(--text-hint)' }} />
             <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
               No results for &ldquo;{q}&rdquo;
             </p>
-          </div>
+          </motion.div>
         )}
 
         <AnimatePresence>

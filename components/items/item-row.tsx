@@ -205,7 +205,7 @@ export function ItemRow({ item, onUpdated, onDeleted, selectMode, selected, onSe
                 onClick={handleDelete}
                 aria-label="Delete item"
                 whileTap={{ scale: 0.9 }}
-                className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-red-50"
+                className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-red-500/10"
               >
                 <Trash2 size={13} style={{ color: 'var(--error)' }} />
               </motion.button>

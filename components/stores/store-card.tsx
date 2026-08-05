@@ -54,7 +54,7 @@ export function StoreCard({ id, name, coverImageUrl, uncheckedCount, index, onDe
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06, duration: 0.3 }}
+      transition={{ delay: Math.min(index, 8) * 0.045, duration: 0.3 }}
       whileTap={{ scale: 0.98 }}
     >
       <div
@@ -104,7 +104,7 @@ export function StoreCard({ id, name, coverImageUrl, uncheckedCount, index, onDe
               <AlertDialogTrigger
                 disabled={deleting}
                 aria-label={`Delete ${name}`}
-                className="flex size-6 items-center justify-center rounded-md transition-colors hover:bg-red-50"
+                className="flex size-6 items-center justify-center rounded-md transition-colors hover:bg-red-500/10"
               >
                 <Trash2 size={12} style={{ color: 'var(--error)' }} />
               </AlertDialogTrigger>

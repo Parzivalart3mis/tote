@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import { ClerkProvider } from '@clerk/nextjs';
 import { Toaster } from '@/components/ui/sonner';
 import { ServiceWorkerRegistrar } from '@/components/motion/service-worker-registrar';
+import { SplashScreen } from '@/components/splash/splash-screen';
 import './globals.css';
 
 const themeScript = `(function(){var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark');})();`;
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <Toaster position="bottom-center" richColors />
           <ServiceWorkerRegistrar />
+          <SplashScreen />
         </body>
       </html>
     </ClerkProvider>

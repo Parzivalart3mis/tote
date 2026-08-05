@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { ShoppingCart, ArrowUpAZ, ArrowDownAZ, ListFilter } from 'lucide-react';
 import { StoreCard } from './store-card';
@@ -98,13 +99,49 @@ export function StoresGrid({ initialStores }: StoresGridProps) {
       </div>
 
       {stores.length === 0 ? (
-        <div className="mt-12 flex flex-col items-center gap-2 text-center">
-          <ShoppingCart size={32} style={{ color: 'var(--text-hint)' }} />
-          <p className="text-base font-medium" style={{ color: 'var(--text)' }}>No stores yet</p>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-            Add your first store to get started.
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 28, delay: 0.1 }}
+          className="mt-14 flex flex-col items-center gap-1 text-center"
+        >
+          <div className="relative mb-3 flex size-24 items-center justify-center">
+            <motion.div
+              className="absolute inset-0 rounded-full"
+              style={{ backgroundColor: 'var(--accent-soft)', opacity: 0.7 }}
+              animate={{ scale: [1, 1.08, 1] }}
+              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            />
+            <motion.div
+              animate={{ y: [0, -7, 0] }}
+              transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
+              className="relative"
+            >
+              <ShoppingCart size={40} style={{ color: 'var(--accent)' }} strokeWidth={1.5} />
+            </motion.div>
+            <motion.span
+              className="absolute right-2 top-3 size-1.5 rounded-full"
+              style={{ backgroundColor: 'var(--highlight)' }}
+              animate={{ y: [0, -5, 0], opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut', delay: 0.4 }}
+            />
+            <motion.span
+              className="absolute bottom-4 left-2 size-1 rounded-full"
+              style={{ backgroundColor: 'var(--accent)' }}
+              animate={{ y: [0, -4, 0], opacity: [0.3, 0.9, 0.3] }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+            />
+          </div>
+          <p className="text-base font-semibold" style={{ color: 'var(--text)' }}>
+            No stores yet
           </p>
-        </div>
+          <p className="max-w-56 text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+            Create a list for each store you shop at and keep your groceries organized.
+          </p>
+          <div className="mt-4">
+            <AddStoreSheet onAdded={handleAdded} variant="cta" />
+          </div>
+        </motion.div>
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           {sorted.map((store, i) => (

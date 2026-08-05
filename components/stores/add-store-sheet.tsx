@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import {
   Sheet,
@@ -20,9 +20,11 @@ import { StoreCard } from './store-card';
 
 interface AddStoreSheetProps {
   onAdded: (store: { id: string; name: string; coverImageUrl: string | null }) => void;
+  /** 'default' — the header pill; 'cta' — the inviting empty-state button. */
+  variant?: 'default' | 'cta';
 }
 
-export function AddStoreSheet({ onAdded }: AddStoreSheetProps) {
+export function AddStoreSheet({ onAdded, variant = 'default' }: AddStoreSheetProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -66,19 +68,30 @@ export function AddStoreSheet({ onAdded }: AddStoreSheetProps) {
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger
-        className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white transition-colors"
-        style={{ backgroundColor: 'var(--accent)' }}
-        onMouseEnter={(e) =>
-          ((e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent-hover)')
-        }
-        onMouseLeave={(e) =>
-          ((e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent)')
-        }
-      >
-        <Plus size={16} />
-        Add store
-      </SheetTrigger>
+      {variant === 'cta' ? (
+        <SheetTrigger
+          className="group inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-transform duration-150 hover:scale-[1.03] active:scale-95"
+          style={{ backgroundColor: 'var(--accent)', boxShadow: '0 8px 20px -6px rgba(22,163,74,0.45)' }}
+          aria-label="Add your first store"
+        >
+          <Sparkles size={15} className="transition-transform duration-300 group-hover:rotate-12" />
+          Add your first store
+        </SheetTrigger>
+      ) : (
+        <SheetTrigger
+          className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white transition-colors"
+          style={{ backgroundColor: 'var(--accent)' }}
+          onMouseEnter={(e) =>
+            ((e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent-hover)')
+          }
+          onMouseLeave={(e) =>
+            ((e.currentTarget as HTMLButtonElement).style.backgroundColor = 'var(--accent)')
+          }
+        >
+          <Plus size={16} />
+          Add store
+        </SheetTrigger>
+      )}
       <SheetContent
         side="bottom"
         className="rounded-t-2xl"
