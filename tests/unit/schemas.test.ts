@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import { createStoreSchema, updateStoreSchema } from '@/lib/schemas/store';
 import { createItemSchema, updateItemSchema } from '@/lib/schemas/item';
 
@@ -72,7 +73,6 @@ describe('createItemSchema', () => {
 });
 
 describe('bulk ids validation', () => {
-  const { z } = require('zod');
   const idsSchema = z.object({ ids: z.array(z.string().min(1)).min(1).max(100) }).strict();
 
   it('accepts valid ids array', () => {
