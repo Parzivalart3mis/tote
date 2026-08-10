@@ -69,8 +69,14 @@ export async function sendToUser(userId: string, payload: PushPayload): Promise<
             .delete(pushSubscriptions)
             .where(and(eq(pushSubscriptions.id, sub.id), eq(pushSubscriptions.userId, userId)));
           pruned++;
+        } else {
+          // Unexpected failure (network, 5xx, VAPID/auth issue). The run still
+          // succeeds to stay idempotent, but log it so a silent delivery outage
+          // on the unattended cron path is visible in server logs.
+          console.error(
+            `[push] send failed for user ${userId} sub ${sub.id}: status=${statusCode ?? 'unknown'} ${(err as Error).message ?? ''}`.trim()
+          );
         }
-        // Other errors (network, 5xx) are swallowed; the run stays successful.
       }
     })
   );
