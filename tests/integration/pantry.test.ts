@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { drizzle } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
-import { users, pantryItems } from '@/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { users, pantryItems, pushSubscriptions } from '@/db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 import * as schema from '@/db/schema';
 import {
   NEXT_PANTRY_STATUS,
@@ -38,6 +38,18 @@ async function migrateTestDb(db: ReturnType<typeof createTestDb>) {
       position INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL
+    )`
+  );
+
+  await db.run(
+    `CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      timezone TEXT NOT NULL DEFAULT 'UTC',
+      created_at INTEGER NOT NULL
     )`
   );
 }
@@ -168,5 +180,76 @@ describe('pantry isolation', () => {
       .orderBy(pantryItems.position);
 
     expect(result.map((r) => r.name)).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('push subscriptions', () => {
+  const db = createTestDb();
+  const userA = 'user_push_a';
+  const userB = 'user_push_b';
+
+  beforeEach(async () => {
+    await migrateTestDb(db);
+    await db.insert(users).values([
+      { id: userA, email: 'push_a@test.com' },
+      { id: userB, email: 'push_b@test.com' },
+    ]).onConflictDoNothing();
+    await db.delete(pushSubscriptions).all();
+  });
+
+  const sub = (userId: string, endpoint: string) => ({
+    userId, endpoint, p256dh: 'p256dh-key', auth: 'auth-key', timezone: 'America/Chicago',
+  });
+
+  it('stores a subscription with its timezone', async () => {
+    const [row] = await db.insert(pushSubscriptions).values(sub(userA, 'https://push.example/a')).returning();
+    expect(row?.userId).toBe(userA);
+    expect(row?.timezone).toBe('America/Chicago');
+  });
+
+  it('enforces a unique endpoint', async () => {
+    await db.insert(pushSubscriptions).values(sub(userA, 'https://push.example/dup'));
+    await expect(
+      db.insert(pushSubscriptions).values(sub(userB, 'https://push.example/dup'))
+    ).rejects.toThrow();
+  });
+
+  it('derives the distinct set of users to notify', async () => {
+    await db.insert(pushSubscriptions).values([
+      sub(userA, 'https://push.example/a1'),
+      sub(userA, 'https://push.example/a2'), // two devices, one user
+      sub(userB, 'https://push.example/b1'),
+    ]);
+    const rows = await db.select({ userId: pushSubscriptions.userId }).from(pushSubscriptions);
+    const distinct = [...new Set(rows.map((r) => r.userId))].sort();
+    expect(distinct).toEqual([userA, userB]);
+  });
+
+  it('pairs subscribed users with their low/out pantry counts', async () => {
+    await db.insert(pushSubscriptions).values(sub(userA, 'https://push.example/only-a'));
+    await db.insert(pantryItems).values([
+      { userId: userA, name: 'Onion', status: 'OUT', position: 0 },
+      { userId: userA, name: 'Sugar', status: 'LOW', position: 1 },
+      { userId: userA, name: 'Rice', status: 'IN_STOCK', position: 2 },
+      { userId: userB, name: 'Salt', status: 'OUT', position: 0 }, // userB has no sub
+    ]);
+
+    const subRows = await db.select({ userId: pushSubscriptions.userId }).from(pushSubscriptions);
+    const userIds = [...new Set(subRows.map((r) => r.userId))];
+    expect(userIds).toEqual([userA]); // userB excluded — not subscribed
+
+    const items = await db
+      .select({ userId: pantryItems.userId, status: pantryItems.status })
+      .from(pantryItems)
+      .where(inArray(pantryItems.userId, userIds));
+    const lowOut = items.filter((i) => i.status !== 'IN_STOCK');
+    expect(lowOut).toHaveLength(2); // Onion + Sugar, Rice excluded
+  });
+
+  it('cascade deletes subscriptions when the user is deleted', async () => {
+    await db.insert(pushSubscriptions).values(sub(userA, 'https://push.example/cascade'));
+    expect(await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userA))).toHaveLength(1);
+    await db.delete(users).where(eq(users.id, userA));
+    expect(await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, userA))).toHaveLength(0);
   });
 });

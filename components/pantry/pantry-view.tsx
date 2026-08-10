@@ -27,6 +27,7 @@ import {
 import { AddPantryItemDialog } from './add-pantry-item-dialog';
 import { PantryItemRow } from './pantry-item-row';
 import { StorePickerSheet, writeLastStore, type PickerStore } from './store-picker-sheet';
+import { PushToggle } from './push-toggle';
 
 interface PantryViewProps {
   initialItems: PantryItem[];
@@ -349,6 +350,7 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
                     </motion.span>
                   </AnimatePresence>
                 </motion.button>
+                <PushToggle />
                 <AddPantryItemDialog onAdded={handleAdded} />
               </div>
             </div>

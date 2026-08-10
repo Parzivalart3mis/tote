@@ -98,10 +98,32 @@ export const pantryItems = sqliteTable(
   (t) => [index('pantry_items_user_idx').on(t.userId)]
 );
 
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => createId()),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    timezone: text('timezone').notNull().default('UTC'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' })
+      .$defaultFn(() => new Date())
+      .notNull(),
+  },
+  (t) => [index('push_subscriptions_user_idx').on(t.userId)]
+);
+
 export type User = typeof users.$inferSelect;
 export type Store = typeof stores.$inferSelect;
 export type Item = typeof items.$inferSelect;
 export type PantryItem = typeof pantryItems.$inferSelect;
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 export type NewStore = typeof stores.$inferInsert;
 export type NewItem = typeof items.$inferInsert;
 export type NewPantryItem = typeof pantryItems.$inferInsert;
+export type NewPushSubscription = typeof pushSubscriptions.$inferInsert;
