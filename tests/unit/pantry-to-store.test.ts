@@ -47,9 +47,10 @@ describe('planPantryToStore', () => {
       []
     );
     const entry = plan.entries[0];
-    expect(entry.kind).toBe('create');
-    if (entry.kind === 'create') {
-      expect(entry.source).toEqual({ name: 'Rice', quantity: '2', unit: 'kg', category: 'Snacks' });
+    expect(entry).toBeDefined();
+    expect(entry!.kind).toBe('create');
+    if (entry!.kind === 'create') {
+      expect(entry!.source).toEqual({ name: 'Rice', quantity: '2', unit: 'kg', category: 'Snacks' });
     }
   });
 

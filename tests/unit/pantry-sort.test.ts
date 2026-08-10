@@ -115,7 +115,7 @@ describe('pantry sorting', () => {
 describe('sort mode cycling', () => {
   it('cycles manual → A–Z → Z–A → manual', () => {
     let mode: PantrySortMode = 'manual';
-    const seen = [mode];
+    const seen: PantrySortMode[] = [mode];
     for (let i = 0; i < 3; i++) { mode = nextSortMode(mode); seen.push(mode); }
     expect(seen).toEqual(['manual', 'name-asc', 'name-desc', 'manual']);
   });
