@@ -8,7 +8,9 @@ let configured = false;
 
 /** Lazily configure web-push with the VAPID env. Returns false if keys are absent. */
 export function isPushConfigured(): boolean {
-  const publicKey = process.env['VAPID_PUBLIC_KEY'];
+  // The public key is identical on both vars; fall back to the NEXT_PUBLIC one so
+  // it only has to be set once (it is present in the server runtime too).
+  const publicKey = process.env['VAPID_PUBLIC_KEY'] || process.env['NEXT_PUBLIC_VAPID_PUBLIC_KEY'];
   const privateKey = process.env['VAPID_PRIVATE_KEY'];
   const subject = process.env['VAPID_SUBJECT'] || 'mailto:admin@example.com';
   if (!publicKey || !privateKey) return false;
