@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AnimatePresence, motion, type MotionStyle } from 'framer-motion';
-import { Package, PackageMinus, PackageOpen, Trash2, GripVertical, ShoppingCart } from 'lucide-react';
+import { Package, PackageMinus, PackageOpen, ShoppingBag, Trash2, GripVertical, ShoppingCart } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryItem } from '@/db/schema';
 import { EditPantryItemDialog } from './edit-pantry-item-dialog';
@@ -11,6 +11,7 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   NEXT_PANTRY_STATUS,
   PANTRY_STATUS_LABEL,
+  canMarkToBuy,
   type PantryStatus,
 } from '@/lib/pantry-status';
 
@@ -24,6 +25,7 @@ const STATUS_STYLE: Record<PantryStatus, {
   IN_STOCK: { color: 'var(--accent)', soft: 'var(--accent-soft)', Icon: Package, badge: null },
   LOW: { color: 'var(--warning)', soft: 'rgba(249,115,22,0.14)', Icon: PackageMinus, badge: 'low' },
   OUT: { color: 'var(--error)', soft: 'rgba(220,38,38,0.1)', Icon: PackageOpen, badge: 'out' },
+  BUY: { color: 'var(--buy)', soft: 'var(--buy-soft)', Icon: ShoppingBag, badge: 'buy' },
 };
 
 interface PantryItemRowProps {
@@ -99,9 +101,16 @@ export function PantryItemRow({
   };
 
   // One tap advances along the depletion cycle: in stock → low → out → in stock
+  // (and from "to buy", a tap means bought → in stock)
   const handleCycleStatus = () => {
     setPulseKey((k) => k + 1);
     void patch({ status: NEXT_PANTRY_STATUS[item.status] });
+  };
+
+  // Shortcut: jump a low/out item straight onto the buy list without cycling
+  const handleMarkToBuy = () => {
+    setPulseKey((k) => k + 1);
+    void patch({ status: 'BUY' });
   };
 
   const handleDelete = async () => {
@@ -244,6 +253,18 @@ export function PantryItemRow({
 
       {/* Actions */}
       <div className="relative flex shrink-0 items-center gap-0.5">
+        {canMarkToBuy(item.status) && (
+          <motion.button
+            onClick={handleMarkToBuy}
+            disabled={loading}
+            aria-label={`Mark ${item.name} to buy`}
+            title="Mark to buy"
+            whileTap={{ scale: 0.85 }}
+            className="flex size-7 items-center justify-center rounded-lg transition-colors hover:bg-black/5 disabled:opacity-40 dark:hover:bg-white/5"
+          >
+            <ShoppingBag size={13} style={{ color: 'var(--buy)' }} />
+          </motion.button>
+        )}
         {onAddToList && (
           <motion.button
             onClick={() => onAddToList(item)}

@@ -24,6 +24,9 @@
   --highlight:     #FBBF24;
   --warning:       #F97316;
   --error:         #DC2626;
+  /* Pantry "To buy" — a cool blue so it reads as intent, not a stock level */
+  --buy:           #2563EB;
+  --buy-soft:      rgba(37, 99, 235, 0.12);
 
   /* shadcn compat — map to Tote palette */
   --background:    #FBF7EE;
@@ -60,6 +63,8 @@
   --color-highlight:    var(--highlight);
   --color-warning:      var(--warning);
   --color-error:        var(--error);
+  --color-buy:          var(--buy);
+  --color-buy-soft:     var(--buy-soft);
 
   /* shadcn compat */
   --color-background:   var(--background);
@@ -101,6 +106,8 @@ html.dark {
   --highlight:     #FBBF24;
   --warning:       #FB923C;
   --error:         #F87171;
+  --buy:           #60A5FA;
+  --buy-soft:      rgba(96, 165, 250, 0.18);
   --border:        #3C3530;
   --input:         #3C3530;
   --background:    #1C1917;

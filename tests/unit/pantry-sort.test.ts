@@ -76,11 +76,11 @@ describe('pantry search filtering', () => {
 });
 
 describe('pantry sorting', () => {
-  it('groups by status regardless of sort mode', () => {
-    const items = [item('Zebra', 'OUT'), item('Apple', 'LOW'), item('Mango', 'IN_STOCK')];
+  it('groups by status regardless of sort mode, with To buy last', () => {
+    const items = [item('Aardvark', 'BUY'), item('Zebra', 'OUT'), item('Apple', 'LOW'), item('Mango', 'IN_STOCK')];
     for (const mode of PANTRY_SORT_MODES) {
       const got = sortPantryItems(items, mode).map((i) => i.status);
-      expect(got).toEqual(['IN_STOCK', 'LOW', 'OUT']);
+      expect(got).toEqual(['IN_STOCK', 'LOW', 'OUT', 'BUY']);
     }
   });
 

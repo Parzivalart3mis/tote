@@ -1,40 +1,24 @@
 import type { PushPayload } from '@/lib/push';
 
-export interface LowOutCounts {
-  low: number;
-  out: number;
-}
-
-/** Tally Low/Out pantry statuses from a list of status strings. */
-export function countLowOut(statuses: string[]): LowOutCounts {
-  let low = 0;
-  let out = 0;
-  for (const s of statuses) {
-    if (s === 'LOW') low++;
-    else if (s === 'OUT') out++;
-  }
-  return { low, out };
-}
-
-function phrase(low: number, out: number): string {
-  const parts: string[] = [];
-  if (out > 0) parts.push(`${out} out of stock`);
-  if (low > 0) parts.push(`${low} running low`);
-  return parts.join(' and ');
+/** Count how many pantry statuses are marked To buy. */
+export function countToBuy(statuses: string[]): number {
+  let n = 0;
+  for (const s of statuses) if (s === 'BUY') n++;
+  return n;
 }
 
 /**
  * Build the reminder push for a user's pantry, or null when there is nothing to
- * remind about (no Low/Out items). Pure so it can be unit tested without a DB.
+ * remind about (no items marked To buy). Low/Out items are deliberately not
+ * counted: being out of something is not the same as needing to buy it.
+ * Pure so it can be unit tested without a DB.
  */
-export function buildReminderPayload(counts: LowOutCounts): PushPayload | null {
-  const { low, out } = counts;
-  const total = low + out;
-  if (total <= 0) return null;
+export function buildReminderPayload(toBuy: number): PushPayload | null {
+  if (toBuy <= 0) return null;
 
   return {
     title: 'Pantry check',
-    body: `You have ${phrase(low, out)} — time to restock.`,
+    body: `You have ${toBuy} item${toBuy === 1 ? '' : 's'} to buy.`,
     url: '/pantry',
     tag: 'pantry-reminder',
   };

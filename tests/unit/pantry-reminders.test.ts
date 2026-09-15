@@ -1,43 +1,42 @@
 import { describe, it, expect } from 'vitest';
-import { countLowOut, buildReminderPayload, localDayKey } from '@/lib/pantry-reminders';
+import { countToBuy, buildReminderPayload, localDayKey } from '@/lib/pantry-reminders';
 
-describe('countLowOut', () => {
-  it('tallies LOW and OUT, ignoring IN_STOCK', () => {
-    expect(countLowOut(['LOW', 'OUT', 'IN_STOCK', 'OUT', 'LOW', 'LOW'])).toEqual({ low: 3, out: 2 });
+describe('countToBuy', () => {
+  it('tallies BUY only, ignoring every other status', () => {
+    expect(countToBuy(['BUY', 'OUT', 'IN_STOCK', 'BUY', 'LOW', 'BUY'])).toBe(3);
   });
 
-  it('returns zeroes for an empty list', () => {
-    expect(countLowOut([])).toEqual({ low: 0, out: 0 });
+  it('does not count Low or Out — being out is not the same as needing to buy', () => {
+    expect(countToBuy(['LOW', 'OUT', 'OUT', 'LOW'])).toBe(0);
+  });
+
+  it('returns zero for an empty list', () => {
+    expect(countToBuy([])).toBe(0);
   });
 
   it('ignores unknown statuses', () => {
-    expect(countLowOut(['IN_STOCK', 'WHATEVER'])).toEqual({ low: 0, out: 0 });
+    expect(countToBuy(['IN_STOCK', 'WHATEVER'])).toBe(0);
   });
 });
 
 describe('buildReminderPayload', () => {
-  it('returns null when nothing is low or out', () => {
-    expect(buildReminderPayload({ low: 0, out: 0 })).toBeNull();
+  it('returns null when nothing is marked to buy', () => {
+    expect(buildReminderPayload(0)).toBeNull();
+    expect(buildReminderPayload(-1)).toBeNull();
   });
 
-  it('phrases out-only', () => {
-    const p = buildReminderPayload({ low: 0, out: 2 });
-    expect(p?.body).toBe('You have 2 out of stock — time to restock.');
-    expect(p?.url).toBe('/pantry');
+  it('phrases a single item', () => {
+    const p = buildReminderPayload(1);
+    expect(p?.body).toBe('You have 1 item to buy.');
   });
 
-  it('phrases low-only', () => {
-    const p = buildReminderPayload({ low: 3, out: 0 });
-    expect(p?.body).toBe('You have 3 running low — time to restock.');
-  });
-
-  it('phrases both, out first', () => {
-    const p = buildReminderPayload({ low: 3, out: 2 });
-    expect(p?.body).toBe('You have 2 out of stock and 3 running low — time to restock.');
+  it('phrases several items', () => {
+    const p = buildReminderPayload(3);
+    expect(p?.body).toBe('You have 3 items to buy.');
   });
 
   it('always targets the pantry with a stable tag', () => {
-    const p = buildReminderPayload({ low: 1, out: 0 });
+    const p = buildReminderPayload(2);
     expect(p?.url).toBe('/pantry');
     expect(p?.tag).toBe('pantry-reminder');
     expect(p?.title).toBe('Pantry check');

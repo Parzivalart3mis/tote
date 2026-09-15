@@ -6,14 +6,14 @@ import { db } from '@/db';
 import { pushSubscriptions, pantryItems } from '@/db/schema';
 import { apiError, apiOk } from '@/lib/api-helpers';
 import { isPushConfigured, sendToUser } from '@/lib/push';
-import { countLowOut, buildReminderPayload } from '@/lib/pantry-reminders';
+import { countToBuy, buildReminderPayload } from '@/lib/pantry-reminders';
 
 /**
  * Autonomous reminder sender, triggered by an external cron (cron-job.org) at
  * the user's chosen local times (10:00 and 17:00). Secured by a bearer secret,
- * NOT Clerk. Sends a push to every subscribed user who currently has any Low or
- * Out pantry items. Idempotent per invocation and always returns 200 once it has
- * run, so the external cron never retries a completed pass.
+ * NOT Clerk. Sends a push to every subscribed user who currently has any pantry
+ * items marked To buy. Idempotent per invocation and always returns 200 once it
+ * has run, so the external cron never retries a completed pass.
  */
 export async function GET(req: Request) {
   const secret = process.env['CRON_SECRET'];
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
 
   if (userIds.length === 0) return apiOk({ ok: true, processed: 0, notified: 0 });
 
-  // Pull Low/Out pantry items for exactly those users in one query.
+  // Pull pantry statuses for exactly those users in one query.
   const rows = await db
     .select({ userId: pantryItems.userId, status: pantryItems.status })
     .from(pantryItems)
@@ -53,8 +53,8 @@ export async function GET(req: Request) {
 
   for (const userId of userIds) {
     processed++;
-    const payload = buildReminderPayload(countLowOut(byUser.get(userId) ?? []));
-    if (!payload) continue; // nothing low or out — no reminder
+    const payload = buildReminderPayload(countToBuy(byUser.get(userId) ?? []));
+    if (!payload) continue; // nothing to buy — no reminder
     const result = await sendToUser(userId, payload);
     if (result.sent > 0) notified++;
   }

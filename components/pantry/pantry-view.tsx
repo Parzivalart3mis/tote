@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import {
-  Package, PackageMinus, PackageOpen, Search, X, SearchX,
+  Package, PackageMinus, PackageOpen, ShoppingBag, Search, X, SearchX,
   ChevronDown, ArrowUpAZ, ArrowDownAZ, GripVertical, ShoppingCart,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -39,6 +39,7 @@ const SECTIONS: { status: PantryStatus; label: string; color: string; soft: stri
   { status: 'IN_STOCK', label: 'In stock', color: 'var(--text-muted)', soft: 'var(--accent-soft)', Icon: Package },
   { status: 'LOW', label: 'Running low', color: 'var(--warning)', soft: 'rgba(249,115,22,0.14)', Icon: PackageMinus },
   { status: 'OUT', label: 'Out', color: 'var(--error)', soft: 'rgba(220,38,38,0.1)', Icon: PackageOpen },
+  { status: 'BUY', label: 'To buy', color: 'var(--buy)', soft: 'var(--buy-soft)', Icon: ShoppingBag },
 ];
 
 function readSortMode(): PantrySortMode {
@@ -192,11 +193,12 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
     });
   };
 
-  // Open the store picker for one row, or for all low+out items (bulk).
+  // Open the store picker for one row, or for everything marked To buy (bulk).
+  // Low/Out are deliberately excluded: being out is not the same as needing to buy.
   const openPickerForItem = (item: PantryItem) => setPickerFor([item]);
-  const lowAndOut = items.filter((i) => i.status !== 'IN_STOCK');
-  const openPickerForLowAndOut = () => {
-    if (lowAndOut.length > 0) setPickerFor(lowAndOut);
+  const toBuy = items.filter((i) => i.status === 'BUY');
+  const openPickerForToBuy = () => {
+    if (toBuy.length > 0) setPickerFor(toBuy);
   };
 
   const handlePickStore = async (store: PickerStore) => {
@@ -269,6 +271,7 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
   const inStockCount = countOf('IN_STOCK');
   const lowCount = countOf('LOW');
   const outCount = countOf('OUT');
+  const buyCount = countOf('BUY');
   const total = items.length || 1;
   const pct = (n: number) => (n / total) * 100;
 
@@ -403,19 +406,35 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
                         out
                       </motion.span>
                     )}
+                    {buyCount > 0 && (
+                      <motion.span
+                        key="buy-chip"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5"
+                        style={{ backgroundColor: 'var(--buy-soft)', color: 'var(--buy)' }}
+                      >
+                        <ShoppingBag size={10} />
+                        <AnimatedCount value={buyCount} />
+                        to buy
+                      </motion.span>
+                    )}
                   </AnimatePresence>
                 </div>
-                {/* Segmented health bar: green / amber / red in proportion */}
+                {/* Segmented health bar: green / amber / red / blue in proportion */}
                 <div
                   className="flex h-1 w-full overflow-hidden rounded-full"
                   style={{ backgroundColor: 'var(--border)' }}
                   role="img"
-                  aria-label={`Pantry stock: ${inStockCount} in stock, ${lowCount} running low, ${outCount} out`}
+                  aria-label={`Pantry stock: ${inStockCount} in stock, ${lowCount} running low, ${outCount} out, ${buyCount} to buy`}
                 >
                   {([
                     { key: 'in', n: inStockCount, bg: 'linear-gradient(90deg, var(--accent), #4ADE80)' },
                     { key: 'low', n: lowCount, bg: 'var(--warning)' },
                     { key: 'out', n: outCount, bg: 'var(--error)' },
+                    { key: 'buy', n: buyCount, bg: 'var(--buy)' },
                   ] as const).map((seg) => (
                     <motion.div
                       key={seg.key}
@@ -428,20 +447,20 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
                   ))}
                 </div>
 
-                {/* Bulk: send everything low or out to a store's shopping list */}
+                {/* Bulk: send everything marked To buy to a store's shopping list */}
                 <AnimatePresence>
-                  {hasStores && lowAndOut.length > 0 && (
+                  {hasStores && toBuy.length > 0 && (
                     <motion.button
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
-                      onClick={openPickerForLowAndOut}
+                      onClick={openPickerForToBuy}
                       whileTap={{ scale: 0.99 }}
                       className="flex w-full items-center justify-center gap-1.5 overflow-hidden rounded-xl py-2 text-xs font-semibold text-white"
                       style={{ backgroundColor: 'var(--accent)' }}
                     >
                       <ShoppingCart size={13} />
-                      <span>{`Add ${lowAndOut.length} low & out to a trip`}</span>
+                      <span>{`Add ${toBuy.length} to buy item${toBuy.length === 1 ? '' : 's'} to a trip`}</span>
                     </motion.button>
                   )}
                 </AnimatePresence>

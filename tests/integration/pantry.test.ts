@@ -101,15 +101,39 @@ describe('pantry isolation', () => {
       seen.push(current);
     }
 
-    // in stock → low → out → back to in stock
+    // in stock → low → out → back to in stock; the cycle never drifts into BUY
     expect(seen).toEqual(['IN_STOCK', 'LOW', 'OUT', 'IN_STOCK']);
   });
 
-  it('ranks statuses in stock → low → out for display order', async () => {
+  it('marks an item to buy directly and restocks it on the next tap', async () => {
+    const [item] = await db
+      .insert(pantryItems)
+      .values({ userId: userA, name: 'Cumin', status: 'LOW', position: 0 })
+      .returning();
+
+    // The shortcut jumps straight to BUY without passing through OUT.
+    const [marked] = await db
+      .update(pantryItems)
+      .set({ status: 'BUY' })
+      .where(eq(pantryItems.id, item!.id))
+      .returning();
+    expect(marked?.status).toBe('BUY');
+
+    // From BUY, one tap on the stock button means "bought it".
+    const [restocked] = await db
+      .update(pantryItems)
+      .set({ status: NEXT_PANTRY_STATUS[marked!.status] })
+      .where(eq(pantryItems.id, item!.id))
+      .returning();
+    expect(restocked?.status).toBe('IN_STOCK');
+  });
+
+  it('ranks statuses in stock → low → out → to buy for display order', async () => {
     await db.insert(pantryItems).values([
-      { userId: userA, name: 'Gone', status: 'OUT', position: 0 },
-      { userId: userA, name: 'Plenty', status: 'IN_STOCK', position: 1 },
-      { userId: userA, name: 'Getting low', status: 'LOW', position: 2 },
+      { userId: userA, name: 'Need', status: 'BUY', position: 0 },
+      { userId: userA, name: 'Gone', status: 'OUT', position: 1 },
+      { userId: userA, name: 'Plenty', status: 'IN_STOCK', position: 2 },
+      { userId: userA, name: 'Getting low', status: 'LOW', position: 3 },
     ]);
 
     const rows = await db.select().from(pantryItems).where(eq(pantryItems.userId, userA));
@@ -117,12 +141,15 @@ describe('pantry isolation', () => {
       (a, b) => PANTRY_STATUS_RANK[a.status] - PANTRY_STATUS_RANK[b.status]
     );
 
-    expect(ordered.map((r) => r.name)).toEqual(['Plenty', 'Getting low', 'Gone']);
+    expect(ordered.map((r) => r.name)).toEqual(['Plenty', 'Getting low', 'Gone', 'Need']);
   });
 
   it('rejects a status outside the allowed set', () => {
     const ok = updatePantryItemSchema.safeParse({ status: 'LOW' });
     expect(ok.success).toBe(true);
+
+    const buy = updatePantryItemSchema.safeParse({ status: 'BUY' });
+    expect(buy.success).toBe(true);
 
     const bad = updatePantryItemSchema.safeParse({ status: 'ALMOST_GONE' });
     expect(bad.success).toBe(false);
@@ -225,13 +252,15 @@ describe('push subscriptions', () => {
     expect(distinct).toEqual([userA, userB]);
   });
 
-  it('pairs subscribed users with their low/out pantry counts', async () => {
+  it('pairs subscribed users with their to-buy pantry counts', async () => {
     await db.insert(pushSubscriptions).values(sub(userA, 'https://push.example/only-a'));
     await db.insert(pantryItems).values([
-      { userId: userA, name: 'Onion', status: 'OUT', position: 0 },
-      { userId: userA, name: 'Sugar', status: 'LOW', position: 1 },
-      { userId: userA, name: 'Rice', status: 'IN_STOCK', position: 2 },
-      { userId: userB, name: 'Salt', status: 'OUT', position: 0 }, // userB has no sub
+      { userId: userA, name: 'Onion', status: 'BUY', position: 0 },
+      { userId: userA, name: 'Cumin', status: 'BUY', position: 1 },
+      { userId: userA, name: 'Sugar', status: 'LOW', position: 2 },   // low ≠ to buy
+      { userId: userA, name: 'Ghee', status: 'OUT', position: 3 },    // out ≠ to buy
+      { userId: userA, name: 'Rice', status: 'IN_STOCK', position: 4 },
+      { userId: userB, name: 'Salt', status: 'BUY', position: 0 },    // userB has no sub
     ]);
 
     const subRows = await db.select({ userId: pushSubscriptions.userId }).from(pushSubscriptions);
@@ -242,8 +271,8 @@ describe('push subscriptions', () => {
       .select({ userId: pantryItems.userId, status: pantryItems.status })
       .from(pantryItems)
       .where(inArray(pantryItems.userId, userIds));
-    const lowOut = items.filter((i) => i.status !== 'IN_STOCK');
-    expect(lowOut).toHaveLength(2); // Onion + Sugar, Rice excluded
+    const toBuy = items.filter((i) => i.status === 'BUY');
+    expect(toBuy).toHaveLength(2); // Onion + Cumin; Sugar/Ghee/Rice excluded
   });
 
   it('cascade deletes subscriptions when the user is deleted', async () => {

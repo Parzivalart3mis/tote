@@ -100,6 +100,11 @@ describe('findRestockCandidate (store → pantry)', () => {
     expect(got?.id).toBe('p1');
   });
 
+  it('matches a BUY pantry item by name', () => {
+    const got = findRestockCandidate('Rice', [cand('p1', 'Rice', 'BUY')]);
+    expect(got?.id).toBe('p1');
+  });
+
   it('does NOT match an in-stock pantry item', () => {
     expect(findRestockCandidate('Rice', [cand('p1', 'Rice', 'IN_STOCK')])).toBeNull();
   });
