@@ -2,6 +2,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 import { apiError, apiOk } from '@/lib/api-helpers';
+import { categorizeErrorResponse } from '@/lib/ai-categorize';
 import { requireAuthWithSync } from '@/lib/auth';
 import { geminiConfigured } from '@/lib/gemini';
 import { categorizeUncategorized } from '@/lib/pantry-categorize';
@@ -24,7 +25,6 @@ export async function POST() {
   try {
     return apiOk(await categorizeUncategorized(userId));
   } catch (err) {
-    console.error('[pantry/categorize] failed', err);
-    return apiError('INTERNAL', 'Could not categorize with AI', 502);
+    return categorizeErrorResponse('pantry/categorize', err);
   }
 }

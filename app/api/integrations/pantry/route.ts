@@ -19,8 +19,9 @@ import { checkRateLimit } from '@/lib/ratelimit';
  * pantry, read-only, and only the in-stock / running-low items that are food.
  *
  * "Food" is decided by category (Household / Personal Care are not). Items
- * nobody has categorized yet are sorted with Gemini first, so new household
- * items don't leak into recipe suggestions.
+ * nobody has categorized yet are sorted with Gemini first; any still unsorted
+ * (AI down or slow) are judged by name, so household items don't leak into
+ * recipe suggestions either way.
  */
 export async function GET(req: Request) {
   const secret = process.env['PANTRY_SHARE_SECRET'];
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
 
   if (geminiConfigured()) {
     // Best effort and time-boxed: the caller is waiting. On failure, unsorted
-    // items are still shared and the caller's own name filter applies.
+    // items fall back to the name check in toSharedPantry.
     await categorizeUncategorized(userId, { timeoutMs: 6_000 }).catch((err) =>
       console.warn('[integrations/pantry] categorize skipped', err)
     );

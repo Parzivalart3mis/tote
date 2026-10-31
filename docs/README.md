@@ -45,15 +45,21 @@ Fill in `.env.local`:
 | `TURSO_AUTH_TOKEN` | Required for hosted Turso; blank for local |
 | `UPSTASH_REDIS_REST_URL` | Upstash console (optional — rate limiting disabled if blank) |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash console (optional) |
+| `GEMINI_API_KEY` | Google AI Studio. Powers "Sort with AI" in the pantry and stores (optional — those buttons return 503 without it) |
+| `GEMINI_MODEL` | Optional. A Gemini model to try before the built-in fast fallback chain (`lib/gemini.ts`) |
 | `PANTRY_SHARE_SECRET` | Optional. Long random string (`openssl rand -hex 32`) that The Cookbook sends as `Authorization: Bearer …` to read your pantry. Put the same value in the Cookbook's `TOTE_API_KEY`. |
 | `PANTRY_SHARE_USER_ID` | Optional. The tote user whose pantry is shared: your Clerk user ID (`user_…`, Clerk dashboard → Users). |
 
 ### Pantry sharing with The Cookbook
 
-`GET /api/integrations/pantry` returns your **In stock** and **Running low** items
+`GET /api/integrations/pantry` returns your **In stock** and **Running low** food
 (name, quantity, unit, category, status only) for The Cookbook's AI Kitchen. It is
 off (503) until both `PANTRY_SHARE_*` variables are set, and it never exposes Out /
 To buy items, notes or other users' data.
+
+Household and Personal Care items are never shared. Items without a category are
+sorted with Gemini first (capped at 6s); if that isn't possible, they're judged by
+name, so things like toilet paper or detergent stay out either way.
 
 ### 3. Create local database and seed
 

@@ -120,12 +120,12 @@ export function StoreDetailView({ store, initialItems, restockCandidates = [] }:
     setCategorizing(true);
     try {
       const res = await fetch(`/api/stores/${storeData.id}/items/categorize`, { method: 'POST' });
-      const json = await res.json() as { categorized?: number; items?: Item[] };
-      if (!res.ok) throw new Error();
+      const json = await res.json().catch(() => ({})) as { categorized?: number; items?: Item[]; error?: { message?: string } };
+      if (!res.ok) throw new Error(json.error?.message ?? 'Could not categorize items');
       if (json.items && json.items.length > 0) setItems(sortItems(json.items, sortMode));
       toast.success(`${json.categorized ?? 0} item${json.categorized === 1 ? '' : 's'} categorized`);
-    } catch {
-      toast.error('Could not categorize items');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not categorize items');
     } finally {
       setCategorizing(false);
     }

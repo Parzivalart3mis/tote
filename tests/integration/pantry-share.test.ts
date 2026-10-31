@@ -40,6 +40,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   vi.stubEnv('PANTRY_SHARE_SECRET', SECRET);
   vi.stubEnv('PANTRY_SHARE_USER_ID', OWNER);
+  vi.stubEnv('GEMINI_API_KEY', ''); // AI unavailable: uncategorized items fall back to the name check
   await testDb.delete(pantryItems);
   await testDb.insert(pantryItems).values([
     { userId: OWNER, name: 'Eggs', quantity: '12', status: 'IN_STOCK', position: 0, note: 'private note' },
@@ -48,6 +49,7 @@ beforeEach(async () => {
     { userId: OWNER, name: 'Rice', status: 'BUY', position: 3 },
     { userId: OWNER, name: 'Laundry Detergent', status: 'IN_STOCK', position: 4, category: 'Household' },
     { userId: OWNER, name: 'Shampoo', status: 'LOW', position: 5, category: 'Personal Care' },
+    { userId: OWNER, name: 'Paper Towels', status: 'IN_STOCK', position: 6 }, // uncategorized, not food
     { userId: OTHER, name: 'Someone else’s tofu', status: 'IN_STOCK', position: 0 },
   ]);
 });

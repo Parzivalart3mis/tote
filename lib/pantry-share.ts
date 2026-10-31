@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { PantryItem } from '@/db/schema';
 import type { PantryStatus } from '@/lib/pantry-status';
-import { isEdibleCategory } from '@/lib/categories';
+import { isEdibleCategory, looksNonFood } from '@/lib/categories';
 
 /**
  * Read-only pantry sharing for trusted companion apps (The Cookbook's AI
@@ -23,6 +23,14 @@ export function isShareableStatus(status: PantryStatus): status is SharedPantryI
 }
 
 /**
+ * Food by category. An item nobody has categorized yet (the AI was unavailable)
+ * is judged by its name instead, so toilet paper never reaches a recipe prompt.
+ */
+export function isFood(item: Pick<PantryItem, 'name' | 'category'>): boolean {
+  return item.category?.trim() ? isEdibleCategory(item.category.trim()) : !looksNonFood(item.name);
+}
+
+/**
  * Only food you have, and only the fields a recipe suggester needs; ids, notes
  * and ordering stay private. Household / Personal Care items are dropped.
  */
@@ -30,7 +38,7 @@ export function toSharedPantry(
   rows: Pick<PantryItem, 'name' | 'quantity' | 'unit' | 'category' | 'status'>[]
 ): SharedPantryItem[] {
   return rows
-    .filter((r) => isShareableStatus(r.status) && isEdibleCategory(r.category))
+    .filter((r) => isShareableStatus(r.status) && isFood(r))
     .map((r) => ({
       name: r.name.trim(),
       quantity: r.quantity ?? null,

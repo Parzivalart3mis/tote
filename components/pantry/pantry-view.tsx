@@ -294,7 +294,7 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
     setCategorizing(true);
     try {
       const res = await fetch('/api/pantry/items/categorize', { method: 'POST' });
-      const json = await res.json() as {
+      const json = await res.json().catch(() => ({})) as {
         updated?: { id: string; category: string }[];
         remaining?: number;
         error?: { message?: string };

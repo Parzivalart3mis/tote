@@ -1,6 +1,6 @@
 import type { PantryItem } from '@/db/schema';
 import { PANTRY_STATUS_RANK } from '@/lib/pantry-status';
-import { PANTRY_CATEGORIES } from '@/lib/categories';
+import { PANTRY_CATEGORIES, toPantryCategory } from '@/lib/categories';
 
 export const PANTRY_SORT_MODES = ['manual', 'name-asc', 'name-desc'] as const;
 export type PantrySortMode = (typeof PANTRY_SORT_MODES)[number];
@@ -57,7 +57,8 @@ export const PANTRY_VIEW_KEY = 'tote:pantry:view';
 
 /**
  * Split rows (already sorted) into category groups in shelf order: pantry
- * categories first, then any older store-aisle values A–Z, uncategorized last.
+ * categories first, then any other values A–Z, uncategorized last. Older
+ * store-aisle values join their matching shelf ("Dairy" → "Dairy & Eggs").
  * Row order inside a group is preserved.
  */
 export function groupByCategory<T extends { category: string | null }>(
@@ -65,7 +66,7 @@ export function groupByCategory<T extends { category: string | null }>(
 ): { category: string | null; rows: T[] }[] {
   const groups = new Map<string | null, T[]>();
   for (const row of rows) {
-    const key = row.category?.trim() || null;
+    const key = toPantryCategory(row.category);
     const list = groups.get(key);
     if (list) list.push(row);
     else groups.set(key, [row]);
