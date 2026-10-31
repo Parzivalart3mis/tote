@@ -45,6 +45,15 @@ Fill in `.env.local`:
 | `TURSO_AUTH_TOKEN` | Required for hosted Turso; blank for local |
 | `UPSTASH_REDIS_REST_URL` | Upstash console (optional — rate limiting disabled if blank) |
 | `UPSTASH_REDIS_REST_TOKEN` | Upstash console (optional) |
+| `PANTRY_SHARE_SECRET` | Optional. Long random string (`openssl rand -hex 32`) that The Cookbook sends as `Authorization: Bearer …` to read your pantry. Put the same value in the Cookbook's `TOTE_API_KEY`. |
+| `PANTRY_SHARE_USER_ID` | Optional. The tote user whose pantry is shared: your Clerk user ID (`user_…`, Clerk dashboard → Users). |
+
+### Pantry sharing with The Cookbook
+
+`GET /api/integrations/pantry` returns your **In stock** and **Running low** items
+(name, quantity, unit, category, status only) for The Cookbook's AI Kitchen. It is
+off (503) until both `PANTRY_SHARE_*` variables are set, and it never exposes Out /
+To buy items, notes or other users' data.
 
 ### 3. Create local database and seed
 

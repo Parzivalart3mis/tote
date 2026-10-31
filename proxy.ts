@@ -8,6 +8,7 @@ const isPublicRoute = createRouteMatcher([
   '/api/health',
   '/api/img',
   '/api/cron(.*)', // external cron; secured by CRON_SECRET, not Clerk
+  '/api/integrations(.*)', // companion apps (The Cookbook); secured by PANTRY_SHARE_SECRET, not Clerk
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
