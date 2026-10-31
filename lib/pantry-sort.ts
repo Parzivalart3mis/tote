@@ -1,5 +1,6 @@
 import type { PantryItem } from '@/db/schema';
 import { PANTRY_STATUS_RANK } from '@/lib/pantry-status';
+import { PANTRY_CATEGORIES } from '@/lib/categories';
 
 export const PANTRY_SORT_MODES = ['manual', 'name-asc', 'name-desc'] as const;
 export type PantrySortMode = (typeof PANTRY_SORT_MODES)[number];
@@ -47,4 +48,34 @@ export function filterPantryItems(arr: PantryItem[], query: string): PantryItem[
   const q = query.trim();
   if (!q) return arr;
   return arr.filter((i) => matchesQuery(i, q));
+}
+
+/** Pantry views: the original status list, or the same list with category sub-groups. */
+export const PANTRY_VIEW_MODES = ['status', 'category'] as const;
+export type PantryViewMode = (typeof PANTRY_VIEW_MODES)[number];
+export const PANTRY_VIEW_KEY = 'tote:pantry:view';
+
+/**
+ * Split rows (already sorted) into category groups in shelf order: pantry
+ * categories first, then any older store-aisle values A–Z, uncategorized last.
+ * Row order inside a group is preserved.
+ */
+export function groupByCategory<T extends { category: string | null }>(
+  rows: T[]
+): { category: string | null; rows: T[] }[] {
+  const groups = new Map<string | null, T[]>();
+  for (const row of rows) {
+    const key = row.category?.trim() || null;
+    const list = groups.get(key);
+    if (list) list.push(row);
+    else groups.set(key, [row]);
+  }
+  const rank = (c: string | null) => {
+    if (c === null) return Number.MAX_SAFE_INTEGER;
+    const i = (PANTRY_CATEGORIES as readonly string[]).indexOf(c);
+    return i === -1 ? PANTRY_CATEGORIES.length : i;
+  };
+  return [...groups.entries()]
+    .sort(([a], [b]) => rank(a) - rank(b) || (a ?? '').localeCompare(b ?? ''))
+    .map(([category, rows]) => ({ category, rows }));
 }

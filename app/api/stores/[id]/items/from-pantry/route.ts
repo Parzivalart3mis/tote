@@ -6,6 +6,7 @@ import { checkRateLimit } from '@/lib/ratelimit';
 import { apiError, apiOk } from '@/lib/api-helpers';
 import { requireAuthWithSync } from '@/lib/auth';
 import { planPantryToStore } from '@/lib/pantry-to-store';
+import { toStoreCategory } from '@/lib/categories';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -78,7 +79,7 @@ export async function POST(req: Request, { params }: Params) {
         name: entry.source.name,
         quantity: entry.source.quantity ?? null,
         unit: entry.source.unit ?? null,
-        category: entry.source.category ?? null,
+        category: toStoreCategory(entry.source.category),
         onList: true,
         position: nextPos++,
       });

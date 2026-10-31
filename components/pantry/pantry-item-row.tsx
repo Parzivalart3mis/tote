@@ -49,11 +49,13 @@ interface PantryItemRowProps {
   /** Invoked when the row's "add to shopping list" action is tapped. When absent,
       the action is not shown (e.g. in-stock rows or when the user has no stores). */
   onAddToList?: ((item: PantryItem) => void) | undefined;
+  /** Hide the category badge (the "By category" view already shows it as a heading). */
+  hideCategory?: boolean;
 }
 
 export function PantryItemRow({
   item, onUpdated, onDeleted, showHandle, entryDelay = 0, isNew,
-  animateEntry = false, disableLayout = false, style: injectedStyle, onAddToList,
+  animateEntry = false, disableLayout = false, style: injectedStyle, onAddToList, hideCategory = false,
 }: PantryItemRowProps) {
   const [loading, setLoading] = useState(false);
   // Increments on each toggle press so the pulse ring re-fires exactly once per interaction
@@ -221,7 +223,7 @@ export function PantryItemRow({
               {[item.quantity, item.unit].filter(Boolean).join(' ')}
             </span>
           )}
-          {item.category && (
+          {item.category && !hideCategory && (
             <span
               className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
               style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}

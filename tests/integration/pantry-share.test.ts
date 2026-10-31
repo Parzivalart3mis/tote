@@ -46,6 +46,8 @@ beforeEach(async () => {
     { userId: OWNER, name: 'Spinach', status: 'LOW', position: 1 },
     { userId: OWNER, name: 'Milk', status: 'OUT', position: 2 },
     { userId: OWNER, name: 'Rice', status: 'BUY', position: 3 },
+    { userId: OWNER, name: 'Laundry Detergent', status: 'IN_STOCK', position: 4, category: 'Household' },
+    { userId: OWNER, name: 'Shampoo', status: 'LOW', position: 5, category: 'Personal Care' },
     { userId: OTHER, name: 'Someone else’s tofu', status: 'IN_STOCK', position: 0 },
   ]);
 });
@@ -55,7 +57,7 @@ afterEach(() => {
 });
 
 describe('GET /api/integrations/pantry', () => {
-  it('returns only the owner’s in-stock and running-low items, without private fields', async () => {
+  it('returns only the owner’s in-stock and running-low food items, without private fields', async () => {
     const res = await GET(request(`Bearer ${SECRET}`));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: Record<string, unknown>[] };

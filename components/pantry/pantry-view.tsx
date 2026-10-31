@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useState, useCallback, useMemo, useRef, useEffect, useSyncExternalStore } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion';
 import {
   Package, PackageMinus, PackageOpen, ShoppingBag, Search, X, SearchX,
   ChevronDown, ArrowUpAZ, ArrowDownAZ, GripVertical, ShoppingCart,
+  List, Shapes, Sparkles, LoaderCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -21,8 +22,9 @@ import type { PantryItem } from '@/db/schema';
 import { type PantryStatus } from '@/lib/pantry-status';
 import {
   PANTRY_SORT_MODES, PANTRY_SORT_KEY, PANTRY_COLLAPSE_KEY,
-  type PantrySortMode, nextSortMode, sortModeLabel,
-  sortPantryItems, filterPantryItems,
+  PANTRY_VIEW_MODES, PANTRY_VIEW_KEY,
+  type PantrySortMode, type PantryViewMode, nextSortMode, sortModeLabel,
+  sortPantryItems, filterPantryItems, groupByCategory,
 } from '@/lib/pantry-sort';
 import { AddPantryItemDialog } from './add-pantry-item-dialog';
 import { PantryItemRow } from './pantry-item-row';
@@ -46,6 +48,36 @@ function readSortMode(): PantrySortMode {
   if (typeof window === 'undefined') return 'manual';
   const saved = localStorage.getItem(PANTRY_SORT_KEY) as PantrySortMode | null;
   return saved && PANTRY_SORT_MODES.includes(saved) ? saved : 'manual';
+}
+
+/**
+ * The saved view lives in localStorage. Read through useSyncExternalStore so the
+ * server (and hydration) render "status" and the saved view takes over right
+ * after, with no hydration mismatch.
+ */
+const viewListeners = new Set<() => void>();
+
+function readViewMode(): PantryViewMode {
+  try {
+    const saved = localStorage.getItem(PANTRY_VIEW_KEY) as PantryViewMode | null;
+    return saved && PANTRY_VIEW_MODES.includes(saved) ? saved : 'status';
+  } catch {
+    return 'status';
+  }
+}
+
+function subscribeViewMode(onChange: () => void): () => void {
+  viewListeners.add(onChange);
+  window.addEventListener('storage', onChange);
+  return () => {
+    viewListeners.delete(onChange);
+    window.removeEventListener('storage', onChange);
+  };
+}
+
+function writeViewMode(mode: PantryViewMode) {
+  try { localStorage.setItem(PANTRY_VIEW_KEY, mode); } catch {}
+  viewListeners.forEach((l) => l());
 }
 
 function readCollapsed(): PantryStatus[] {
@@ -106,6 +138,11 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [newItemId, setNewItemId] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<PantryStatus[]>(readCollapsed);
+  const viewMode = useSyncExternalStore(subscribeViewMode, readViewMode, () => 'status' as const);
+  const [categorizing, setCategorizing] = useState(false);
+  // Uncategorized ids already sent to the AI, so a skipped or failed item
+  // doesn't trigger an endless retry loop. Cleared by the manual "Sort" button.
+  const attemptedRef = useRef<Set<string>>(new Set());
 
   // Store picker: pantry → shopping list. `pickerFor` holds the pantry items the
   // next store pick will add — one item for a row action, many for the bulk action.
@@ -244,6 +281,52 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
     });
   };
 
+  const selectViewMode = (mode: PantryViewMode) => writeViewMode(mode);
+
+  const uncategorizedIds = useMemo(
+    () => items.filter((i) => !i.category?.trim()).map((i) => i.id),
+    [items]
+  );
+
+  /** Ask Gemini (server-side) to shelve every uncategorized item, then patch local state. */
+  const runCategorize = useCallback(async (ids: string[]) => {
+    for (const id of ids) attemptedRef.current.add(id);
+    setCategorizing(true);
+    try {
+      const res = await fetch('/api/pantry/items/categorize', { method: 'POST' });
+      const json = await res.json() as {
+        updated?: { id: string; category: string }[];
+        remaining?: number;
+        error?: { message?: string };
+      };
+      if (!res.ok) throw new Error(json.error?.message ?? 'Could not sort with AI');
+      const updated = new Map((json.updated ?? []).map((u) => [u.id, u.category]));
+      if (updated.size > 0) {
+        setItems((prev) => prev.map((i) => (updated.has(i.id) && !i.category ? { ...i, category: updated.get(i.id)! } : i)));
+        // Progress was made: let anything left (e.g. beyond one batch) go round again.
+        if ((json.remaining ?? 0) > 0) attemptedRef.current = new Set();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not sort with AI');
+    } finally {
+      setCategorizing(false);
+    }
+  }, []);
+
+  // In the category view, new or never-sorted items are shelved automatically.
+  useEffect(() => {
+    if (viewMode !== 'category' || categorizing) return;
+    const pending = uncategorizedIds.filter((id) => !attemptedRef.current.has(id));
+    if (pending.length === 0) return;
+    const t = setTimeout(() => { void runCategorize(pending); }, 250);
+    return () => clearTimeout(t);
+  }, [viewMode, categorizing, uncategorizedIds, runCategorize]);
+
+  const retryCategorize = () => {
+    attemptedRef.current = new Set();
+    void runCategorize(uncategorizedIds);
+  };
+
   const query = searchQuery.trim();
   const isSearching = query.length > 0;
 
@@ -292,7 +375,24 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
   };
 
   const entryDelay = (index: number) => (firstMount.current ? Math.min(index, 8) * 0.045 : 0);
-  const dragEnabled = !isSearching && sortMode === 'manual';
+  const byCategory = viewMode === 'category';
+  // Dragging reorders the flat status list; it has no meaning across category groups.
+  const dragEnabled = !isSearching && sortMode === 'manual' && !byCategory;
+
+  const renderRow = (item: PantryItem, status: PantryStatus, index: number) => (
+    <PantryItemRow
+      key={item.id}
+      item={item}
+      onUpdated={handleUpdated}
+      onDeleted={handleDeleted}
+      showHandle={dragEnabled && status !== 'OUT'}
+      entryDelay={entryDelay(index)}
+      isNew={item.id === newItemId}
+      animateEntry={firstMount.current}
+      onAddToList={hasStores && status !== 'IN_STOCK' ? openPickerForItem : undefined}
+      hideCategory={byCategory}
+    />
+  );
 
   const listShell = 'overflow-hidden rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.03),0_4px_16px_-4px_rgba(0,0,0,0.06)]';
   const listShellStyle = { borderColor: 'var(--border)', backgroundColor: 'var(--surface)' };
@@ -467,6 +567,65 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
               </motion.div>
             )}
           </motion.div>
+
+          {/* View switch: the original status list, or the same list shelved by AI category */}
+          {items.length > 0 && (
+            <div className="mb-3 space-y-2">
+              <div
+                role="tablist"
+                aria-label="Pantry view"
+                className="grid grid-cols-2 gap-1 rounded-xl border p-1"
+                style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
+              >
+                {([
+                  { mode: 'status', label: 'By status', Icon: List },
+                  { mode: 'category', label: 'By category', Icon: Shapes },
+                ] as const).map(({ mode, label, Icon }) => {
+                  const active = viewMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => selectViewMode(mode)}
+                      className="flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-semibold transition-colors"
+                      style={{
+                        backgroundColor: active ? 'var(--accent)' : 'transparent',
+                        color: active ? '#fff' : 'var(--text-muted)',
+                      }}
+                    >
+                      <Icon size={13} />
+                      {label}
+                      {mode === 'category' && <Sparkles size={11} className="opacity-80" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {byCategory && (categorizing || uncategorizedIds.length > 0) && (
+                <div
+                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-xs"
+                  style={{ backgroundColor: 'var(--accent-soft)', color: 'var(--accent)' }}
+                  role="status"
+                >
+                  {categorizing ? (
+                    <>
+                      <LoaderCircle size={13} className="animate-spin" />
+                      <span>Sorting {uncategorizedIds.length} item{uncategorizedIds.length === 1 ? '' : 's'} into categories with AI…</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={13} />
+                      <span>{uncategorizedIds.length} item{uncategorizedIds.length === 1 ? '' : 's'} not sorted yet</span>
+                      <button onClick={retryCategorize} className="ml-auto font-semibold underline-offset-2 hover:underline">
+                        Sort with AI
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Search bar */}
           <AnimatePresence>
@@ -646,19 +805,33 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
                           </motion.button>,
                           ...(isCollapsed
                             ? []
-                            : section.rows.map((item, idx) => (
-                                <PantryItemRow
-                                  key={item.id}
-                                  item={item}
-                                  onUpdated={handleUpdated}
-                                  onDeleted={handleDeleted}
-                                  showHandle={dragEnabled && section.status !== 'OUT'}
-                                  entryDelay={entryDelay(section.start + idx)}
-                                  isNew={item.id === newItemId}
-                                  animateEntry={firstMount.current}
-                                  onAddToList={hasStores && section.status !== 'IN_STOCK' ? openPickerForItem : undefined}
-                                />
-                              ))),
+                            : byCategory
+                              ? (() => {
+                                  // Category sub-groups inside the status section.
+                                  let offset = section.start;
+                                  return groupByCategory(section.rows).flatMap((group) => {
+                                    const start = offset;
+                                    offset += group.rows.length;
+                                    return [
+                                      <motion.div
+                                        key={`cat-${section.status}-${group.category ?? 'none'}`}
+                                        layout
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="flex items-center gap-1.5 border-b px-3.5 pb-1 pt-2.5 text-[11px] font-semibold"
+                                        style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+                                      >
+                                        {group.category ?? (categorizing ? 'Sorting…' : 'Uncategorized')}
+                                        <span className="tabular-nums" style={{ color: 'var(--text-hint)' }}>
+                                          {group.rows.length}
+                                        </span>
+                                      </motion.div>,
+                                      ...group.rows.map((item, idx) => renderRow(item, section.status, start + idx)),
+                                    ];
+                                  });
+                                })()
+                              : section.rows.map((item, idx) => renderRow(item, section.status, section.start + idx))),
                         ];
                       })}
                     </AnimatePresence>

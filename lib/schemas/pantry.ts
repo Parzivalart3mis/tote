@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { ITEM_CATEGORIES } from '@/lib/categories';
+import { PANTRY_CATEGORY_VALUES } from '@/lib/categories';
 import { PANTRY_STATUSES } from '@/lib/pantry-status';
 
-const categoryEnum = z.enum(ITEM_CATEGORIES as unknown as [string, ...string[]]).optional().nullable();
+const categoryEnum = z.enum(PANTRY_CATEGORY_VALUES).optional().nullable();
 
 export const createPantryItemSchema = z
   .object({

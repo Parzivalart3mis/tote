@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { PantryItem } from '@/db/schema';
 import type { PantryStatus } from '@/lib/pantry-status';
+import { isEdibleCategory } from '@/lib/categories';
 
 /**
  * Read-only pantry sharing for trusted companion apps (The Cookbook's AI
@@ -21,14 +22,17 @@ export function isShareableStatus(status: PantryStatus): status is SharedPantryI
   return (SHAREABLE_STATUSES as readonly PantryStatus[]).includes(status);
 }
 
-/** Only the fields a recipe suggester needs; ids, notes and ordering stay private. */
+/**
+ * Only food you have, and only the fields a recipe suggester needs; ids, notes
+ * and ordering stay private. Household / Personal Care items are dropped.
+ */
 export function toSharedPantry(
   rows: Pick<PantryItem, 'name' | 'quantity' | 'unit' | 'category' | 'status'>[]
 ): SharedPantryItem[] {
   return rows
-    .filter((r) => isShareableStatus(r.status))
+    .filter((r) => isShareableStatus(r.status) && isEdibleCategory(r.category))
     .map((r) => ({
-      name: r.name,
+      name: r.name.trim(),
       quantity: r.quantity ?? null,
       unit: r.unit ?? null,
       category: r.category ?? null,

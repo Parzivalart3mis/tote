@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { PantryItem } from '@/db/schema';
 import { updatePantryItemSchema, type UpdatePantryItemInput } from '@/lib/schemas/pantry';
-import { ITEM_CATEGORIES } from '@/lib/categories';
+import { PANTRY_CATEGORIES } from '@/lib/categories';
 
 interface EditPantryItemDialogProps {
   item: PantryItem;
@@ -145,9 +145,13 @@ export function EditPantryItemDialog({ item, onUpdated }: EditPantryItemDialogPr
                 style={{ ...inputStyle, color: 'var(--text)' }}
               >
                 <option value="">— None —</option>
-                {ITEM_CATEGORIES.map((c) => (
+                {PANTRY_CATEGORIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
+                {/* Keep an older store-aisle value selectable so saving doesn't drop it */}
+                {item.category && !(PANTRY_CATEGORIES as readonly string[]).includes(item.category) && (
+                  <option value={item.category}>{item.category}</option>
+                )}
               </select>
               <ChevronDown
                 size={14}

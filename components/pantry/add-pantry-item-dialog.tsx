@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { PantryItem } from '@/db/schema';
 import { createPantryItemSchema, type CreatePantryItemInput } from '@/lib/schemas/pantry';
-import { ITEM_CATEGORIES } from '@/lib/categories';
+import { PANTRY_CATEGORIES } from '@/lib/categories';
 
 interface AddPantryItemDialogProps {
   onAdded: (item: PantryItem) => void;
@@ -159,7 +159,7 @@ export function AddPantryItemDialog({ onAdded, variant = 'icon' }: AddPantryItem
                 style={{ ...inputStyle, color: 'var(--text)' }}
               >
                 <option value="">— None —</option>
-                {ITEM_CATEGORIES.map((c) => (
+                {PANTRY_CATEGORIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
