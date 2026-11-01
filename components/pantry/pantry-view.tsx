@@ -819,11 +819,11 @@ export function PantryView({ initialItems, stores }: PantryViewProps) {
                                         initial={{ opacity: 0 }}
                                         animate={{ opacity: 1 }}
                                         exit={{ opacity: 0 }}
-                                        className="flex items-center gap-1.5 border-b px-3.5 pb-1 pt-2.5 text-[11px] font-semibold"
-                                        style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+                                        className="flex items-center gap-1.5 border-b px-3.5 pb-1.5 pt-3 text-[13px] font-bold"
+                                        style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
                                       >
                                         {group.category ?? (categorizing ? 'Sorting…' : 'Uncategorized')}
-                                        <span className="tabular-nums" style={{ color: 'var(--text-hint)' }}>
+                                        <span className="text-[11px] font-semibold tabular-nums" style={{ color: 'var(--text-hint)' }}>
                                           {group.rows.length}
                                         </span>
                                       </motion.div>,
