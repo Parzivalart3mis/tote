@@ -1,6 +1,8 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+import { createHmac } from 'node:crypto';
+import { clerkClient } from '@clerk/nextjs/server';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '@/db';
 import { pantryItems } from '@/db/schema';
@@ -8,41 +10,49 @@ import { apiError, apiOk } from '@/lib/api-helpers';
 import { geminiConfigured } from '@/lib/gemini';
 import { categorizeUncategorized } from '@/lib/pantry-categorize';
 import { pantryStatusRank } from '@/lib/pantry-order';
-import { SHAREABLE_STATUSES, isAuthorizedBearer, toSharedPantry } from '@/lib/pantry-share';
+import { SHAREABLE_STATUSES, toSharedPantry } from '@/lib/pantry-share';
 import { checkRateLimit } from '@/lib/ratelimit';
+import { normalizePantryEmail, verifyPantryIdentity } from '@/lib/pantry-identity';
 
-/**
- * Read-only pantry feed for The Cookbook's AI Kitchen. The two apps use
- * different Clerk instances, so this is secured by a bearer secret, NOT Clerk
- * (same model as /api/cron). The secret is bound to exactly one tote user via
- * PANTRY_SHARE_USER_ID, so a leaked secret can only ever expose that one
- * pantry, read-only, and only the in-stock / running-low items that are food.
- *
- * "Food" is decided by category (Household / Personal Care are not). Items
- * nobody has categorized yet are sorted with Gemini first; any still unsorted
- * (AI down or slow) are judged by name, so household items don't leak into
- * recipe suggestions either way.
- */
-export async function GET(req: Request) {
-  const secret = process.env['PANTRY_SHARE_SECRET'];
-  const userId = process.env['PANTRY_SHARE_USER_ID'];
-  if (!secret || !userId) return apiError('INTERNAL', 'Pantry sharing not configured', 503);
+/** Old bearer-only requests must never silently read a fixed owner's pantry. */
+export async function GET() {
+  return apiError('VALIDATION', 'Use the verified-email pantry linking protocol.', 410);
+}
 
-  if (!isAuthorizedBearer(req.headers.get('authorization'), secret)) {
-    return apiError('UNAUTHORIZED', 'Invalid pantry share secret', 401);
-  }
-
-  const { ok } = await checkRateLimit(`pantry-share:${userId}`);
+/** Only Cookbook may assert an email; tote independently checks its own Clerk. */
+export async function POST(req: Request) {
+  const secret = process.env['PANTRY_SHARE_SECRET']?.trim();
+  if (!secret) return apiError('INTERNAL', 'Pantry linking is not configured', 503);
+  const identity = verifyPantryIdentity(req.headers.get('authorization'), secret);
+  if (!identity) return apiError('UNAUTHORIZED', 'Invalid or expired pantry identity', 401);
+  const { ok } = await checkRateLimit(`pantry-share:${identity.subject}`);
   if (!ok) return apiError('RATE_LIMITED', 'Too many requests', 429);
 
-  if (geminiConfigured()) {
-    // Best effort and time-boxed: the caller is waiting. On failure, unsorted
-    // items fall back to the name check in toSharedPantry.
-    await categorizeUncategorized(userId, { timeoutMs: 6_000 }).catch((err) =>
-      console.warn('[integrations/pantry] categorize skipped', err)
+  let userId: string;
+  try {
+    const client = await clerkClient();
+    const result = await client.users.getUserList({ emailAddress: [identity.email], limit: 2 });
+    if (result.totalCount > 1 || result.data.length > 1)
+      return apiError('VALIDATION', 'Ambiguous tote account', 409);
+    const user = result.data[0];
+    if (!user) return apiError('NOT_FOUND', 'No matching tote account', 404);
+    const matching = user.emailAddresses.filter(
+      (address) => normalizePantryEmail(address.emailAddress) === identity.email,
     );
+    if (!matching.length) return apiError('NOT_FOUND', 'No matching tote account', 404);
+    if (!matching.some((address) => address.verification?.status === 'verified'))
+      return apiError('FORBIDDEN', 'Verify the matching email in tote', 403);
+    userId = user.id;
+  } catch {
+    console.warn('[integrations/pantry] Clerk identity lookup unavailable');
+    return apiError('INTERNAL', 'Could not verify the linked account', 503);
   }
 
+  if (geminiConfigured()) {
+    await categorizeUncategorized(userId, { timeoutMs: 6_000 }).catch(() =>
+      console.warn('[integrations/pantry] categorization unavailable'),
+    );
+  }
   const rows = await db
     .select({
       name: pantryItems.name,
@@ -52,8 +62,20 @@ export async function GET(req: Request) {
       status: pantryItems.status,
     })
     .from(pantryItems)
-    .where(and(eq(pantryItems.userId, userId), inArray(pantryItems.status, [...SHAREABLE_STATUSES])))
+    .where(
+      and(eq(pantryItems.userId, userId), inArray(pantryItems.status, [...SHAREABLE_STATUSES])),
+    )
     .orderBy(pantryStatusRank, asc(pantryItems.position), asc(pantryItems.createdAt));
 
-  return apiOk({ items: toSharedPantry(rows), generatedAt: new Date().toISOString() });
+  const connectionId = createHmac('sha256', secret)
+    .update(JSON.stringify(['tote-pantry', userId, identity.email]))
+    .digest('hex');
+  const response = apiOk({
+    protocolVersion: 2,
+    connectionId,
+    items: toSharedPantry(rows),
+    generatedAt: new Date().toISOString(),
+  });
+  response.headers.set('Cache-Control', 'private, no-store');
+  return response;
 }

@@ -1,4 +1,3 @@
-import { timingSafeEqual } from 'node:crypto';
 import type { PantryItem } from '@/db/schema';
 import type { PantryStatus } from '@/lib/pantry-status';
 import { isEdibleCategory, looksNonFood } from '@/lib/categories';
@@ -35,7 +34,7 @@ export function isFood(item: Pick<PantryItem, 'name' | 'category'>): boolean {
  * and ordering stay private. Household / Personal Care items are dropped.
  */
 export function toSharedPantry(
-  rows: Pick<PantryItem, 'name' | 'quantity' | 'unit' | 'category' | 'status'>[]
+  rows: Pick<PantryItem, 'name' | 'quantity' | 'unit' | 'category' | 'status'>[],
 ): SharedPantryItem[] {
   return rows
     .filter((r) => isShareableStatus(r.status) && isFood(r))
@@ -46,18 +45,4 @@ export function toSharedPantry(
       category: r.category ?? null,
       status: r.status as SharedPantryItem['status'],
     }));
-}
-
-/**
- * Constant-time check of an `Authorization: Bearer <secret>` header so the
- * secret can't be recovered by timing responses.
- */
-export function isAuthorizedBearer(header: string | null, secret: string): boolean {
-  if (!header || !secret) return false;
-  const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-  if (!match) return false;
-  const given = Buffer.from(match[1]!.trim());
-  const expected = Buffer.from(secret);
-  if (given.length !== expected.length) return false;
-  return timingSafeEqual(given, expected);
 }

@@ -37,29 +37,45 @@ cp .env.example .env.local
 
 Fill in `.env.local`:
 
-| Variable | Description |
-|---|---|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk dashboard → API keys |
-| `CLERK_SECRET_KEY` | Clerk dashboard → API keys |
-| `TURSO_DATABASE_URL` | `file:./local.db` locally, `libsql://…` in prod |
-| `TURSO_AUTH_TOKEN` | Required for hosted Turso; blank for local |
-| `UPSTASH_REDIS_REST_URL` | Upstash console (optional — rate limiting disabled if blank) |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash console (optional) |
-| `GEMINI_API_KEY` | Google AI Studio. Powers "Sort with AI" in the pantry and stores (optional — those buttons return 503 without it) |
-| `GEMINI_MODEL` | Optional. A Gemini model to try before the built-in fast fallback chain (`lib/gemini.ts`) |
-| `PANTRY_SHARE_SECRET` | Optional. Long random string (`openssl rand -hex 32`) that The Cookbook sends as `Authorization: Bearer …` to read your pantry. Put the same value in the Cookbook's `TOTE_API_KEY`. |
-| `PANTRY_SHARE_USER_ID` | Optional. The tote user whose pantry is shared: your Clerk user ID (`user_…`, Clerk dashboard → Users). |
+| Variable                            | Description                                                                                                                                                                       |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk dashboard → API keys                                                                                                                                                        |
+| `CLERK_SECRET_KEY`                  | Clerk dashboard → API keys                                                                                                                                                        |
+| `TURSO_DATABASE_URL`                | `file:./local.db` locally, `libsql://…` in prod                                                                                                                                   |
+| `TURSO_AUTH_TOKEN`                  | Required for hosted Turso; blank for local                                                                                                                                        |
+| `UPSTASH_REDIS_REST_URL`            | Upstash console (optional — rate limiting disabled if blank)                                                                                                                      |
+| `UPSTASH_REDIS_REST_TOKEN`          | Upstash console (optional)                                                                                                                                                        |
+| `GEMINI_API_KEY`                    | Google AI Studio. Powers "Sort with AI" in the pantry and stores (optional — those buttons return 503 without it)                                                                 |
+| `GEMINI_MODEL`                      | Optional. A Gemini model to try before the built-in fast fallback chain (`lib/gemini.ts`)                                                                                         |
+| `PANTRY_SHARE_SECRET`               | Optional. Long random server signing key (`openssl rand -hex 32`); put the same value in Cookbook's `TOTE_API_KEY`. Cookbook signs short-lived verified-email assertions with it. |
 
 ### Pantry sharing with The Cookbook
 
-`GET /api/integrations/pantry` returns your **In stock** and **Running low** food
-(name, quantity, unit, category, status only) for The Cookbook's AI Kitchen. It is
-off (503) until both `PANTRY_SHARE_*` variables are set, and it never exposes Out /
-To buy items, notes or other users' data.
+`POST /api/integrations/pantry` returns **In stock** and **Running low** food
+(name, quantity, unit, category, status only) for each person's AI Kitchen.
+Cookbook reads its authenticated user's verified primary email from Clerk and signs
+a 60-second assertion using the shared server secret. Tote validates the signature,
+audience and expiry, then independently looks up exactly one matching Clerk account
+and checks that the matching email is verified. Only that tote Clerk user's inventory
+is queried, regardless of the user IDs used in Cookbook or stale email values in tote's database.
 
-Household and Personal Care items are never shared. Items without a category are
-sorted with Gemini first (capped at 6s); if that isn't possible, they're judged by
-name, so things like toilet paper or detergent stay out either way.
+Email case and surrounding whitespace are normalized. Dots and plus aliases are not
+merged. Missing, unverified or ambiguous matches return an actionable error and never
+fall back to another person's pantry. Changes to email/verification are checked on every
+refresh. `PANTRY_SHARE_USER_ID` is obsolete and ignored. The old fixed-owner GET feed
+returns 410 so it cannot be mistaken for the current user's data.
+
+Household and Personal Care items are never shared. Uncategorized items are sorted
+best-effort with Gemini, with a food-name safety check if AI is unavailable. Notes,
+shopping lists and identifiers stay private. Responses have `Cache-Control: private,
+no-store`, protocol version 2 and an opaque connection fingerprint. Verified emails
+are transmitted only in the signed Authorization header between servers, never in URLs
+or logs. No per-user environment configuration or database migration is required.
+
+Deploy tote before Cookbook when upgrading from the fixed-owner feed. Both apps
+must use the same `PANTRY_SHARE_SECRET` / `TOTE_API_KEY`; Cookbook also needs the
+correct `TOTE_API_URL`. Test contracts cover two-user isolation, email verification,
+expiry, spoofing, stale DB email values and compatibility of signed tokens.
 
 ### 3. Create local database and seed
 
@@ -78,29 +94,31 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Scripts
 
-| Script | Description |
-|---|---|
-| `npm run dev` | Start dev server |
-| `npm run build` | Production build |
-| `npm start` | Start production server |
-| `npm run lint` | ESLint |
-| `npm run typecheck` | TypeScript strict check |
-| `npm run format` | Prettier |
-| `npm test` | Vitest unit + integration tests |
-| `npm run db:push` | Push schema to DB (dev) |
-| `npm run db:generate` | Generate migration files |
-| `npm run db:migrate` | Run migrations (prod) |
-| `npm run db:seed` | Seed sample data |
+| Script                | Description                     |
+| --------------------- | ------------------------------- |
+| `npm run dev`         | Start dev server                |
+| `npm run build`       | Production build                |
+| `npm start`           | Start production server         |
+| `npm run lint`        | ESLint                          |
+| `npm run typecheck`   | TypeScript strict check         |
+| `npm run format`      | Prettier                        |
+| `npm test`            | Vitest unit + integration tests |
+| `npm run db:push`     | Push schema to DB (dev)         |
+| `npm run db:generate` | Generate migration files        |
+| `npm run db:migrate`  | Run migrations (prod)           |
+| `npm run db:seed`     | Seed sample data                |
 
 ## Adding to home screen
 
 ### iOS (Safari)
+
 1. Open the app in Safari
 2. Tap the Share button (box with arrow)
 3. Tap **Add to Home Screen**
 4. Tap **Add** — done. The icon appears on your home screen and launches with no URL bar.
 
 ### Android (Chrome)
+
 1. Open the app in Chrome
 2. Chrome shows a banner or you can tap the three-dot menu → **Add to Home Screen**
 3. Tap **Install**
@@ -109,6 +127,7 @@ Open [http://localhost:3000](http://localhost:3000).
 ## Production deployment
 
 1. Create a Turso prod database:
+
    ```bash
    turso db create tote
    turso db show tote  # copy the URL
